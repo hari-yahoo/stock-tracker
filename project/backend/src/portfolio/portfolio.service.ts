@@ -344,6 +344,7 @@ export class PortfolioService {
         accountId: buy.accountId,
         instrumentId: buy.instrumentId,
         symbol: buy.instrument.symbol,
+        currency: buy.instrument.quoteCurrency,
         targetDate: buy.exitPlan!.targetDate,
         targetPrice: decimalOutput(buy.exitPlan!.targetPriceMicros),
         currentPrice: price ? decimalOutput(price.priceMicros) : null,

@@ -1,121 +1,409 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode, SVGProps } from 'react'
+import { getPortfolio } from './portfolio'
+import type { Holding, PortfolioAlert, PortfolioSnapshot } from './portfolio'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+type IconProps = SVGProps<SVGSVGElement>
+
+function Icon({ children, ...props }: IconProps & { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      {children}
+    </svg>
+  )
+}
+
+const icons = {
+  dashboard: (
+    <Icon>
+      <rect x="3" y="3" width="7" height="7" rx="2" />
+      <rect x="14" y="3" width="7" height="7" rx="2" />
+      <rect x="3" y="14" width="7" height="7" rx="2" />
+      <rect x="14" y="14" width="7" height="7" rx="2" />
+    </Icon>
+  ),
+  holdings: (
+    <Icon>
+      <path d="M4 19V9m5 10V5m6 14v-7m5 7V3" />
+    </Icon>
+  ),
+  history: (
+    <Icon>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5m4-1v5l3 2" />
+    </Icon>
+  ),
+  spark: (
+    <Icon>
+      <path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z" />
+      <path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z" />
+    </Icon>
+  ),
+  settings: (
+    <Icon>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7L10.5 2h-3l-.7 2-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7L0 10.5v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2.3h3l.7-2 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7 1.5-1Z" />
+    </Icon>
+  ),
+  refresh: (
+    <Icon>
+      <path d="M20 6v5h-5M4 18v-5h5" />
+      <path d="M6.1 9A7 7 0 0 1 18.7 6M17.9 15A7 7 0 0 1 5.3 18" />
+    </Icon>
+  ),
+  arrowUp: (
+    <Icon>
+      <path d="m6 15 6-6 6 6" />
+    </Icon>
+  ),
+  arrowDown: (
+    <Icon>
+      <path d="m6 9 6 6 6-6" />
+    </Icon>
+  ),
+  alert: (
+    <Icon>
+      <path d="M12 3 2.5 20h19L12 3Z" />
+      <path d="M12 9v5m0 3v.1" />
+    </Icon>
+  ),
+  chevron: (
+    <Icon>
+      <path d="m9 6 6 6-6 6" />
+    </Icon>
+  ),
+}
+
+const navItems = [
+  { label: 'Dashboard', icon: icons.dashboard, active: true },
+  { label: 'Holdings', icon: icons.holdings },
+  { label: 'Transactions', icon: icons.history },
+  { label: 'AI Insights', icon: icons.spark },
+]
+
+function scaledToFixed(value: string, digits = 2) {
+  const negative = value.startsWith('-')
+  const normalized = negative ? value.slice(1) : value
+  const [whole = '0', fraction = ''] = normalized.split('.')
+  const scale = 10n ** BigInt(digits)
+  const sourceScale = 10n ** BigInt(fraction.length)
+  const source = BigInt(whole) * sourceScale + BigInt(fraction || '0')
+  const rounded = (source * scale + sourceScale / 2n) / sourceScale
+  const roundedWhole = rounded / scale
+  const roundedFraction = (rounded % scale).toString().padStart(digits, '0')
+  const grouped = roundedWhole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${negative ? '-' : ''}${grouped}.${roundedFraction}`
+}
+
+function formatMoney(value: string | null, currency = 'INR') {
+  if (value === null) return '—'
+  const symbols: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£' }
+  return `${symbols[currency] ?? `${currency} `}${scaledToFixed(value)}`
+}
+
+function formatQuantity(value: string) {
+  const [whole, fraction = ''] = value.split('.')
+  return fraction ? `${whole}.${fraction.slice(0, 4).replace(/0+$/, '')}` : whole
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value))
+}
+
+function pnlTone(value: string | null) {
+  if (!value) return 'neutral'
+  return value.startsWith('-') ? 'negative' : 'positive'
+}
+
+function MetricCard({
+  eyebrow,
+  value,
+  detail,
+  tone = 'neutral',
+  featured = false,
+}: {
+  eyebrow: string
+  value: string
+  detail: string
+  tone?: 'positive' | 'negative' | 'neutral'
+  featured?: boolean
+}) {
+  return (
+    <article className={`metric-card${featured ? ' metric-card--featured' : ''}`}>
+      <div className="metric-card__top">
+        <span>{eyebrow}</span>
+        {featured && <span className="live-pill"><i /> Live</span>}
+      </div>
+      <strong>{value}</strong>
+      <p className={`metric-detail metric-detail--${tone}`}>
+        {tone === 'positive' && icons.arrowUp}
+        {tone === 'negative' && icons.arrowDown}
+        {detail}
+      </p>
+    </article>
+  )
+}
+
+function EmptyHoldings() {
+  return (
+    <div className="empty-state">
+      <div className="empty-state__icon">{icons.holdings}</div>
+      <strong>Your portfolio is ready for its first position</strong>
+      <p>Add an account and a BUY trade through the API to see valuation, cost basis, and exit discipline here.</p>
+    </div>
+  )
+}
+
+function HoldingsTable({ holdings }: { holdings: Holding[] }) {
+  if (!holdings.length) return <EmptyHoldings />
+  return (
+    <div className="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Quantity</th>
+            <th>Avg. cost</th>
+            <th>Market value</th>
+            <th>Unrealized P/L</th>
+            <th aria-label="Open details" />
+          </tr>
+        </thead>
+        <tbody>
+          {holdings.map((holding) => {
+            const tone = pnlTone(holding.unrealizedPnl)
+            return (
+              <tr key={`${holding.account.id}:${holding.instrument.id}`}>
+                <td>
+                  <div className="asset-cell">
+                    <span className="asset-mark">{holding.instrument.symbol.slice(0, 2)}</span>
+                    <span>
+                      <strong>{holding.instrument.symbol}</strong>
+                      <small>{holding.account.name} · {holding.instrument.exchange}</small>
+                    </span>
+                  </div>
+                </td>
+                <td>{formatQuantity(holding.quantity)}</td>
+                <td>{formatMoney(holding.averageCost, holding.instrument.quoteCurrency)}</td>
+                <td>
+                  <strong>{formatMoney(holding.currentValue, holding.instrument.quoteCurrency)}</strong>
+                  <small className="cell-subtle">
+                    {holding.currentPrice
+                      ? `${formatMoney(holding.currentPrice, holding.instrument.quoteCurrency)} / share`
+                      : 'Price needed'}
+                  </small>
+                </td>
+                <td>
+                  <span className={`pnl pnl--${tone}`}>
+                    {formatMoney(holding.unrealizedPnl, holding.instrument.quoteCurrency)}
+                  </span>
+                  <small className={`cell-subtle cell-subtle--${tone}`}>
+                    {holding.unrealizedPnlPercent
+                      ? `${scaledToFixed(holding.unrealizedPnlPercent)}%`
+                      : '—'}
+                  </small>
+                </td>
+                <td><button className="icon-button" aria-label={`View ${holding.instrument.symbol}`}>{icons.chevron}</button></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+const alertLabels: Record<PortfolioAlert['type'], string> = {
+  TARGET_HIT: 'Target price reached',
+  OVERDUE: 'Exit plan overdue',
+  DUE_TODAY: 'Exit due today',
+  APPROACHING: 'Exit date approaching',
+}
+
+function AlertsPanel({ alerts }: { alerts: PortfolioAlert[] }) {
+  return (
+    <section className="panel alerts-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="section-kicker">Plan accountability</span>
+          <h2>Upcoming exits</h2>
+        </div>
+        {alerts.length > 0 && <span className="count-badge">{alerts.length}</span>}
+      </div>
+      {alerts.length ? (
+        <div className="alert-list">
+          {alerts.slice(0, 5).map((alert) => (
+            <article className={`alert-item alert-item--${alert.severity.toLowerCase()}`} key={`${alert.exitPlanId}:${alert.type}`}>
+              <div className="alert-item__icon">{icons.alert}</div>
+              <div>
+                <strong>{alert.symbol}</strong>
+                <p>{alertLabels[alert.type]}</p>
+                <small>
+                  {alert.type === 'TARGET_HIT'
+                    ? `${formatMoney(alert.currentPrice, alert.currency)} now · ${formatMoney(alert.targetPrice, alert.currency)} target`
+                    : `Target date ${formatDate(alert.targetDate)}`}
+                </small>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="quiet-state">
+          <span className="quiet-state__check">✓</span>
+          <strong>No exits need attention</strong>
+          <p>Active plans will appear here seven days before their target date.</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; onRefresh: () => void; refreshing: boolean }) {
+  const totals = data.summary.reportingTotals
+  const pnlToneValue = pnlTone(totals.unrealizedPnl)
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const lastUpdated = useMemo(
+    () => new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit' }).format(new Date(data.asOf)),
+    [data.asOf],
+  )
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <main className="main-content">
+      <header className="page-header">
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+          <span className="section-kicker">Portfolio overview</span>
+          <h1>{greeting}, Hari</h1>
+          <p>Here’s where your investment plan stands today.</p>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
+        <button className="refresh-button" onClick={onRefresh} disabled={refreshing}>
+          <span className={refreshing ? 'is-spinning' : ''}>{icons.refresh}</span>
+          {refreshing ? 'Refreshing…' : `Updated ${lastUpdated}`}
         </button>
+      </header>
+
+      {data.warnings.length > 0 && (
+        <div className="data-warning" role="status">
+          {icons.alert}
+          <span><strong>Some totals need attention.</strong> {data.warnings[0].message}</span>
+        </div>
+      )}
+
+      <section className="metrics-grid" aria-label="Portfolio summary">
+        <MetricCard eyebrow="Total portfolio value" value={formatMoney(totals.currentValue, data.reportingCurrency)} detail={`${data.summary.holdingCount} holdings across ${data.summary.accountCount} accounts`} featured />
+        <MetricCard eyebrow="Unrealized P/L" value={formatMoney(totals.unrealizedPnl, data.reportingCurrency)} detail={totals.unrealizedPnl ? `${pnlToneValue === 'negative' ? '' : '+'}${formatMoney(totals.unrealizedPnl, data.reportingCurrency)} open gain` : 'Add prices to calculate'} tone={pnlToneValue} />
+        <MetricCard eyebrow="Realized P/L" value={formatMoney(totals.realizedPnl, data.reportingCurrency)} detail="From allocated closed lots" tone={pnlTone(totals.realizedPnl)} />
+        <MetricCard eyebrow="Capital at cost" value={formatMoney(totals.costBasis, data.reportingCurrency)} detail={`${data.summary.openLotCount} open investment lots`} />
       </section>
 
-      <div className="ticks"></div>
+      <div className="dashboard-grid">
+        <section className="panel holdings-panel" id="holdings">
+          <div className="panel-heading">
+            <div>
+              <span className="section-kicker">Current positions</span>
+              <h2>Holdings</h2>
+            </div>
+            <span className="panel-meta">{data.summary.holdingCount} assets</span>
+          </div>
+          <HoldingsTable holdings={data.holdings} />
+        </section>
+        <AlertsPanel alerts={data.alerts} />
+      </div>
+    </main>
+  )
+}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+function App() {
+  const [data, setData] = useState<PortfolioSnapshot | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(true)
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setRefreshing(true)
+    try {
+      const snapshot = await getPortfolio(signal)
+      setData(snapshot)
+      setError(null)
+    } catch (requestError) {
+      if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load the portfolio.')
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void getPortfolio(controller.signal)
+      .then((snapshot) => {
+        setData(snapshot)
+        setError(null)
+      })
+      .catch((requestError: unknown) => {
+        if (
+          requestError instanceof DOMException &&
+          requestError.name === 'AbortError'
+        ) {
+          return
+        }
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : 'Unable to load the portfolio.',
+        )
+      })
+      .finally(() => setRefreshing(false))
+    return () => controller.abort()
+  }, [])
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark"><i /><i /><i /></span>
+          <span><strong>Stock</strong>Tracker</span>
+        </div>
+        <nav aria-label="Primary navigation">
+          {navItems.map((item) => (
+            <a key={item.label} href={item.active ? '#top' : `#${item.label.toLowerCase().replace(' ', '-')}`} className={item.active ? 'active' : ''} aria-current={item.active ? 'page' : undefined}>
+              {item.icon}<span>{item.label}</span>{item.active && <i className="nav-indicator" />}
+            </a>
+          ))}
+        </nav>
+        <div className="sidebar-spacer" />
+        <a className="settings-link" href="#settings">{icons.settings}<span>Settings</span></a>
+        <div className="profile-card">
+          <span className="avatar">HG</span>
+          <span><strong>Hari</strong><small>Personal portfolio</small></span>
+        </div>
+      </aside>
+
+      <div className="workspace" id="top">
+        {error && !data ? (
+          <main className="main-content centered-state">
+            <div className="error-card">
+              <span>{icons.alert}</span>
+              <h1>We couldn’t load your portfolio</h1>
+              <p>{error}</p>
+              <button className="primary-button" onClick={() => void load()}>Try again</button>
+            </div>
+          </main>
+        ) : data ? (
+          <Dashboard data={data} onRefresh={() => void load()} refreshing={refreshing} />
+        ) : (
+          <main className="main-content loading-state" aria-label="Loading portfolio">
+            <div className="loading-header" />
+            <div className="loading-metrics">{Array.from({ length: 4 }, (_, index) => <i key={index} />)}</div>
+            <div className="loading-panel" />
+          </main>
+        )}
+      </div>
+    </div>
   )
 }
 
