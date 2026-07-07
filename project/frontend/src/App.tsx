@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode, SVGProps } from 'react'
+import { AiInsights } from './AiInsights'
 import { DataTools } from './DataTools'
 import { getPortfolio } from './portfolio'
 import type { Holding, PortfolioAlert, PortfolioSnapshot } from './portfolio'
@@ -77,11 +78,11 @@ const icons = {
 }
 
 const navItems = [
-  { label: 'Dashboard', icon: icons.dashboard },
+  { label: 'Dashboard', icon: icons.dashboard, view: 'dashboard' as const },
   { label: 'Holdings', icon: icons.holdings },
   { label: 'Transactions', icon: icons.history },
-  { label: 'AI Insights', icon: icons.spark },
-  { label: 'Data & backups', icon: icons.settings },
+  { label: 'AI Insights', icon: icons.spark, view: 'ai' as const },
+  { label: 'Data & backups', icon: icons.settings, view: 'data' as const },
 ]
 
 function scaledToFixed(value: string, digits = 2) {
@@ -321,7 +322,7 @@ function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; o
 }
 
 function App() {
-  const [view, setView] = useState<'dashboard' | 'data'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'ai' | 'data'>('dashboard')
   const [data, setData] = useState<PortfolioSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(true)
@@ -373,8 +374,8 @@ function App() {
         </div>
         <nav aria-label="Primary navigation">
           {navItems.map((item) => (
-            <button key={item.label} type="button" className={(item.label === 'Dashboard' && view === 'dashboard') || (item.label === 'Data & backups' && view === 'data') ? 'active' : ''} aria-current={(item.label === 'Dashboard' && view === 'dashboard') || (item.label === 'Data & backups' && view === 'data') ? 'page' : undefined} disabled={!['Dashboard', 'Data & backups'].includes(item.label)} title={['Dashboard', 'Data & backups'].includes(item.label) ? undefined : 'Coming next'} onClick={() => setView(item.label === 'Data & backups' ? 'data' : 'dashboard')}>
-              {item.icon}<span>{item.label}</span>{((item.label === 'Dashboard' && view === 'dashboard') || (item.label === 'Data & backups' && view === 'data')) && <i className="nav-indicator" />}
+            <button key={item.label} type="button" className={item.view === view ? 'active' : ''} aria-current={item.view === view ? 'page' : undefined} disabled={!item.view} title={item.view ? undefined : 'Coming next'} onClick={() => item.view && setView(item.view)}>
+              {item.icon}<span>{item.label}</span>{item.view === view && <i className="nav-indicator" />}
             </button>
           ))}
         </nav>
@@ -386,7 +387,9 @@ function App() {
       </aside>
 
       <div className="workspace" id="top">
-        {view === 'data' ? (
+        {view === 'ai' ? (
+          <AiInsights />
+        ) : view === 'data' ? (
           <DataTools onDataChanged={() => void load()} />
         ) : error && !data ? (
           <main className="main-content centered-state">

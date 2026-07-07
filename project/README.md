@@ -16,6 +16,8 @@ npm run db:migrate -- --name init
 npm run dev
 ```
 
+Development and production startup automatically apply committed migrations before Nest opens the database. The default SQLite file is `backend/data/stock-tracker.db`; relative `DATABASE_URL` file paths use the backend workspace as their base, matching Prisma CLI behavior.
+
 The React development server runs at `http://localhost:5173` and proxies `/api` requests to Nest at `http://localhost:3000`.
 
 ## Production build

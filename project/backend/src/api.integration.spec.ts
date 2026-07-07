@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { ExitPlanStatus, TradeSide } from '@prisma/client';
 import { AccountsService } from './accounts/accounts.service';
+import { AiPromptsService } from './ai-prompts/ai-prompts.service';
 import { BackupsService } from './backups/backups.service';
 import { DataTransferService } from './data-transfer/data-transfer.service';
 import { PrismaService } from './database/prisma.service';
@@ -232,6 +233,19 @@ describe('ledger API services', () => {
       importedTrades: 1,
     });
     expect((await transfer.exportTrades()).toString()).toContain('CSV Account');
+
+    const generatedPrompt = await new AiPromptsService(
+      portfolio,
+      prisma,
+    ).generate({
+      reportingCurrency: 'INR',
+      asOf: '2026-12-03T10:00:00.000Z',
+      additionalInstructions: 'Focus on exit-plan discipline.',
+    });
+    expect(generatedPrompt.prompt).toContain('Portfolio strategy review request');
+    expect(generatedPrompt.prompt).toContain('AAPL');
+    expect(generatedPrompt.prompt).toContain('Focus on exit-plan discipline.');
+    expect(generatedPrompt.context.holdingCount).toBeGreaterThan(0);
 
     const backups = new BackupsService(prisma);
     const createdBackup = backups.create('integration-test');

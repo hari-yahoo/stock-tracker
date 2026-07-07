@@ -128,3 +128,16 @@ Missing price and FX data appears in `warnings`. Affected consolidated values ar
 CSV imports use the same columns produced by the export endpoint. Rows must be ordered with BUY trades before SELL trades that allocate to them. The `allocations` column uses `opening-trade-id:quantity` entries separated by `|`.
 
 Restore runs SQLite integrity and required-table checks before replacing data. A `pre-restore` rollback snapshot is always retained locally.
+
+## AI prompt generator
+
+- `POST /ai-prompts/generate`
+
+```json
+{
+  "reportingCurrency": "INR",
+  "additionalInstructions": "Focus on concentration and exit-plan discipline."
+}
+```
+
+The endpoint generates a local text prompt containing the portfolio snapshot, open holdings, active exit plans, alerts, recent closed lots, data-quality warnings, and review instructions. It does not send portfolio data to an AI provider.

@@ -6,7 +6,7 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    // SQLite file URLs are resolved relative to prisma/schema.prisma.
-    url: process.env.DATABASE_URL ?? 'file:../data/stock-tracker.db',
+    // Prisma config resolves this relative to the backend workspace.
+    url: process.env.DATABASE_URL ?? 'file:./data/stock-tracker.db',
   },
 });

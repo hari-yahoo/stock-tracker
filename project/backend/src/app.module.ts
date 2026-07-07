@@ -4,6 +4,7 @@ import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AccountsModule } from './accounts/accounts.module';
+import { AiPromptsModule } from './ai-prompts/ai-prompts.module';
 import { BackupsModule } from './backups/backups.module';
 import { DatabaseModule } from './database/database.module';
 import { DataTransferModule } from './data-transfer/data-transfer.module';
@@ -28,6 +29,7 @@ import { TradesModule } from './trades/trades.module';
     PortfolioModule,
     DataTransferModule,
     BackupsModule,
+    AiPromptsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
