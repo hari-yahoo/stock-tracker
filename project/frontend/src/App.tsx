@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode, SVGProps } from 'react'
+import { DataTools } from './DataTools'
 import { getPortfolio } from './portfolio'
 import type { Holding, PortfolioAlert, PortfolioSnapshot } from './portfolio'
 import './App.css'
@@ -76,10 +77,11 @@ const icons = {
 }
 
 const navItems = [
-  { label: 'Dashboard', icon: icons.dashboard, active: true },
+  { label: 'Dashboard', icon: icons.dashboard },
   { label: 'Holdings', icon: icons.holdings },
   { label: 'Transactions', icon: icons.history },
   { label: 'AI Insights', icon: icons.spark },
+  { label: 'Data & backups', icon: icons.settings },
 ]
 
 function scaledToFixed(value: string, digits = 2) {
@@ -319,6 +321,7 @@ function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; o
 }
 
 function App() {
+  const [view, setView] = useState<'dashboard' | 'data'>('dashboard')
   const [data, setData] = useState<PortfolioSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(true)
@@ -370,13 +373,12 @@ function App() {
         </div>
         <nav aria-label="Primary navigation">
           {navItems.map((item) => (
-            <a key={item.label} href={item.active ? '#top' : `#${item.label.toLowerCase().replace(' ', '-')}`} className={item.active ? 'active' : ''} aria-current={item.active ? 'page' : undefined}>
-              {item.icon}<span>{item.label}</span>{item.active && <i className="nav-indicator" />}
-            </a>
+            <button key={item.label} type="button" className={(item.label === 'Dashboard' && view === 'dashboard') || (item.label === 'Data & backups' && view === 'data') ? 'active' : ''} aria-current={(item.label === 'Dashboard' && view === 'dashboard') || (item.label === 'Data & backups' && view === 'data') ? 'page' : undefined} disabled={!['Dashboard', 'Data & backups'].includes(item.label)} title={['Dashboard', 'Data & backups'].includes(item.label) ? undefined : 'Coming next'} onClick={() => setView(item.label === 'Data & backups' ? 'data' : 'dashboard')}>
+              {item.icon}<span>{item.label}</span>{((item.label === 'Dashboard' && view === 'dashboard') || (item.label === 'Data & backups' && view === 'data')) && <i className="nav-indicator" />}
+            </button>
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        <a className="settings-link" href="#settings">{icons.settings}<span>Settings</span></a>
         <div className="profile-card">
           <span className="avatar">HG</span>
           <span><strong>Hari</strong><small>Personal portfolio</small></span>
@@ -384,7 +386,9 @@ function App() {
       </aside>
 
       <div className="workspace" id="top">
-        {error && !data ? (
+        {view === 'data' ? (
+          <DataTools onDataChanged={() => void load()} />
+        ) : error && !data ? (
           <main className="main-content centered-state">
             <div className="error-card">
               <span>{icons.alert}</span>

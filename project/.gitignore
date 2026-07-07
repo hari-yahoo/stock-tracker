@@ -15,7 +15,7 @@ coverage/
 *.db
 backend/data/*
 !backend/data/.gitkeep
-backups/
+/backups/
 
 # Local configuration and logs
 .env

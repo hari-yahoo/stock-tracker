@@ -65,7 +65,9 @@ export class DataTransferService {
           orderBy: { id: 'asc' },
         },
       },
-      orderBy: [{ executedAt: 'asc' }, { side: 'asc' }, { id: 'asc' }],
+      // BUY rows must precede SELL rows so exported lot references can be
+      // imported in a single forward pass.
+      orderBy: [{ side: 'asc' }, { executedAt: 'asc' }, { id: 'asc' }],
     });
 
     return writeCsv([

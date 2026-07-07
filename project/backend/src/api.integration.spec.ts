@@ -1,10 +1,12 @@
 import { readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { ExitPlanStatus, TradeSide } from '@prisma/client';
 import { AccountsService } from './accounts/accounts.service';
+import { BackupsService } from './backups/backups.service';
+import { DataTransferService } from './data-transfer/data-transfer.service';
 import { PrismaService } from './database/prisma.service';
 import { ExitPlansService } from './exit-plans/exit-plans.service';
 import { InstrumentsService } from './instruments/instruments.service';
@@ -41,6 +43,10 @@ describe('ledger API services', () => {
     for (const suffix of ['', '-shm', '-wal']) {
       rmSync(`${databasePath}${suffix}`, { force: true });
     }
+    rmSync(join(tmpdir(), 'backups', basename(databasePath, '.db')), {
+      force: true,
+      recursive: true,
+    });
   });
 
   it('creates, prices, plans, allocates, and voids ledger records', async () => {
@@ -164,6 +170,11 @@ describe('ledger API services', () => {
       realizedPnl: '791.380952',
     });
 
+    const transfer = new DataTransferService(prisma);
+    const exported = await transfer.exportTrades();
+    expect(exported).toContain('INFY');
+    expect(exported).toContain(`${buy.id}:4`);
+
     await expect(
       trades.create({
         accountId: account.id,
@@ -201,5 +212,39 @@ describe('ledger API services', () => {
     expect(historicalSnapshot.summary.reportingTotals.realizedPnl).toBe(
       '791.380952',
     );
+
+    const csvId = randomUUID();
+    const importCsv = [
+      'id,account,account_currency,symbol,exchange,instrument_currency,side,quantity,price,fees,executed_at,external_reference,notes,allocations',
+      `${csvId},CSV Account,INR,TCS,NSE,INR,BUY,2,100,0,2026-07-01T09:30:00.000Z,CSV-1,,`,
+      '',
+    ].join('\r\n');
+    const countBeforeDryRun = await prisma.trade.count();
+    expect(await transfer.importTrades(importCsv, true)).toMatchObject({
+      dryRun: true,
+      importedTrades: 1,
+      createdAccounts: 1,
+      createdInstruments: 1,
+    });
+    expect(await prisma.trade.count()).toBe(countBeforeDryRun);
+    expect(await transfer.importTrades(importCsv, false)).toMatchObject({
+      dryRun: false,
+      importedTrades: 1,
+    });
+    expect((await transfer.exportTrades()).toString()).toContain('CSV Account');
+
+    const backups = new BackupsService(prisma);
+    const createdBackup = backups.create('integration-test');
+    expect(createdBackup.size).toBeGreaterThan(100);
+    const downloaded = backups.download();
+    expect(downloaded.data.subarray(0, 16).toString()).toBe(
+      'SQLite format 3\u0000',
+    );
+    expect(await backups.restore(downloaded.data)).toMatchObject({
+      restored: true,
+    });
+    expect(
+      await prisma.trade.findUnique({ where: { id: csvId } }),
+    ).not.toBeNull();
   });
 });
