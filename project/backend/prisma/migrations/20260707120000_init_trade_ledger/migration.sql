@@ -114,8 +114,10 @@ BEGIN
   ) THEN RAISE(ABORT, 'allocation trades must be posted BUY/SELL for the same account and instrument') END;
 
   SELECT CASE WHEN NEW."quantity_micros" + COALESCE((
-    SELECT sum("quantity_micros") FROM "lot_allocations"
-    WHERE "opening_trade_id" = NEW."opening_trade_id"
+    SELECT sum(allocation."quantity_micros") FROM "lot_allocations" allocation
+    JOIN "trades" closing ON closing."id" = allocation."closing_trade_id"
+    WHERE allocation."opening_trade_id" = NEW."opening_trade_id"
+      AND closing."status" = 'POSTED'
   ), 0) > (SELECT "quantity_micros" FROM "trades" WHERE "id" = NEW."opening_trade_id")
   THEN RAISE(ABORT, 'allocation exceeds opening trade quantity') END;
 

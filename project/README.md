@@ -52,3 +52,4 @@ npm run check
 Generated builds, local databases, backups, environment files, and editor metadata are excluded from version control.
 
 The ledger model and fixed-point arithmetic rules are documented in [docs/trade-ledger.md](docs/trade-ledger.md).
+API endpoints and request examples are documented in [docs/api.md](docs/api.md).
