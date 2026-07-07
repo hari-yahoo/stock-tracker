@@ -15,6 +15,7 @@ import { InstrumentsService } from './instruments/instruments.service';
 import { PricesService } from './prices/prices.service';
 import { PortfolioService } from './portfolio/portfolio.service';
 import { TradesService } from './trades/trades.service';
+import { ZerodhaPriceProvider } from './prices/zerodha-price-provider';
 
 describe('ledger API services', () => {
   const databasePath = join(tmpdir(), `stock-tracker-${randomUUID()}.db`);
@@ -55,9 +56,13 @@ describe('ledger API services', () => {
     const accounts = new AccountsService(prisma);
     const instruments = new InstrumentsService(prisma);
     const trades = new TradesService(prisma);
-    const prices = new PricesService(prisma);
     const plans = new ExitPlansService(prisma);
     const portfolio = new PortfolioService(prisma);
+    const prices = new PricesService(
+      prisma,
+      portfolio,
+      new ZerodhaPriceProvider(),
+    );
 
     const account = await accounts.create({
       name: 'Zerodha',
@@ -261,6 +266,29 @@ describe('ledger API services', () => {
     expect(importedIciciTrades).toHaveLength(3);
     expect(importedIciciTrades[2].closingAllocations).toHaveLength(1);
     expect(decimalOutput(importedIciciTrades[2].feesMicros)).toBe('1.5');
+
+    const originalFetch = global.fetch;
+    process.env.STOCK_TRACKER_PRICE_PROVIDER = 'ZERODHA';
+    process.env.ZERODHA_API_KEY = 'kite-key';
+    process.env.ZERODHA_ACCESS_TOKEN = 'kite-token';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          'NSE:INFY': { last_price: 1711.45 },
+          'NASDAQ:AAPL': { last_price: 112.25 },
+          'NSE:ICICI': { last_price: 140.1 },
+        },
+      }),
+    } as Response);
+    const refresh = await prices.refreshEndOfDayPrices('MANUAL');
+    expect(refresh.provider).toBe('ZERODHA');
+    expect(refresh.storedPrices).toBeGreaterThan(0);
+    expect(await prisma.priceSnapshot.count()).toBeGreaterThan(2);
+    global.fetch = originalFetch;
+    delete process.env.STOCK_TRACKER_PRICE_PROVIDER;
+    delete process.env.ZERODHA_API_KEY;
+    delete process.env.ZERODHA_ACCESS_TOKEN;
 
     const generatedPrompt = await new AiPromptsService(
       portfolio,

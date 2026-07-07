@@ -36,9 +36,19 @@ export class PricesController {
     return this.prices.listFx(query);
   }
 
+  @Get('refresh/eod')
+  refreshStatus() {
+    return this.prices.getRefreshStatus();
+  }
+
   @Post('fx')
   createFx(@Body() dto: CreateFxRateDto) {
     return this.prices.createFx(dto);
+  }
+
+  @Post('refresh/eod')
+  refreshEndOfDayPrices() {
+    return this.prices.refreshEndOfDayPrices('MANUAL');
   }
 
   @Post()

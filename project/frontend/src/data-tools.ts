@@ -12,6 +12,23 @@ export interface BackupEntry {
   createdAt: string
 }
 
+export interface PriceRefreshStatus {
+  enabled: boolean
+  provider: string
+  configured: boolean
+  nextRunAt: string | null
+  schedule: string
+}
+
+export interface PriceRefreshResult {
+  trigger: 'MANUAL' | 'SCHEDULED'
+  provider: string
+  requestedInstruments: number
+  storedPrices: number
+  missingSymbols: string[]
+  refreshedAt: string
+}
+
 async function apiError(response: Response): Promise<Error> {
   try {
     const body = (await response.json()) as { message?: string | string[] }
@@ -50,6 +67,20 @@ export async function listBackups() {
   const response = await fetch('/api/backups')
   if (!response.ok) throw await apiError(response)
   return (await response.json()) as BackupEntry[]
+}
+
+export async function getPriceRefreshStatus() {
+  const response = await fetch('/api/prices/refresh/eod')
+  if (!response.ok) throw await apiError(response)
+  return (await response.json()) as PriceRefreshStatus
+}
+
+export async function refreshPricesNow() {
+  const response = await fetch('/api/prices/refresh/eod', {
+    method: 'POST',
+  })
+  if (!response.ok) throw await apiError(response)
+  return (await response.json()) as PriceRefreshResult
 }
 
 export async function createBackup(label?: string) {

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createBackup,
+  getPriceRefreshStatus,
   importIciciDirectTrades,
   importTrades,
   listBackups,
+  refreshPricesNow,
   restoreBackup,
 } from './data-tools'
-import type { BackupEntry, ImportResult } from './data-tools'
+import type { BackupEntry, ImportResult, PriceRefreshStatus } from './data-tools'
 
 function fileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -20,6 +22,7 @@ export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
   const [restoreFile, setRestoreFile] = useState<File | null>(null)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [backups, setBackups] = useState<BackupEntry[]>([])
+  const [priceStatus, setPriceStatus] = useState<PriceRefreshStatus | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const restoreInput = useRef<HTMLInputElement>(null)
@@ -34,6 +37,7 @@ export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
 
   useEffect(() => {
     void listBackups().then(setBackups).catch(() => undefined)
+    void getPriceRefreshStatus().then(setPriceStatus).catch(() => undefined)
   }, [])
 
   async function runImport(dryRun: boolean) {
@@ -93,6 +97,25 @@ export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
       await refreshBackups()
     } catch (error) {
       setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Backup failed.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function refreshPrices() {
+    setBusy('prices')
+    setMessage(null)
+    try {
+      const result = await refreshPricesNow()
+      setMessage({
+        tone: 'success',
+        text: `Stored ${result.storedPrices} end-of-day prices from ${result.provider}.`
+          + (result.missingSymbols.length ? ` Missing ${result.missingSymbols.length} symbols.` : ''),
+      })
+      setPriceStatus(await getPriceRefreshStatus())
+      onDataChanged()
+    } catch (error) {
+      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Price refresh failed.' })
     } finally {
       setBusy(null)
     }
@@ -164,6 +187,24 @@ export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
           <div className="tool-card__heading"><span>CSV</span><h2>Export trades</h2><p>Download posted trades in a portable, allocation-aware format.</p></div>
           <div className="tool-illustration"><span>BUY</span><i>→</i><span>SELL</span></div>
           <a className="primary-button button-link" href="/api/data/trades.csv" download>Download trades CSV</a>
+        </section>
+
+        <section className="panel tool-card">
+          <div className="tool-card__heading"><span>Prices</span><h2>End-of-day refresh</h2><p>Pull latest traded prices for current holdings after market close and store them as snapshots.</p></div>
+          <div className="tool-illustration">
+            <span>{priceStatus?.provider ?? 'DISABLED'}</span>
+            <i>→</i>
+            <span>{priceStatus?.enabled ? '18:00 IST' : 'Manual'}</span>
+          </div>
+          <div className="backup-list">
+            <div className="backup-list__title"><strong>Refresh status</strong><span>{priceStatus?.configured ? 'Ready' : 'Setup needed'}</span></div>
+            <div className="backup-row"><span><strong>Provider</strong><small>{priceStatus?.provider ?? 'Unknown'}</small></span><span>{priceStatus?.configured ? 'Configured' : 'Not configured'}</span></div>
+            <div className="backup-row"><span><strong>Schedule</strong><small>{priceStatus?.schedule ?? '18:00 IST daily'}</small></span><span>{priceStatus?.enabled ? 'Enabled' : 'Disabled'}</span></div>
+            <div className="backup-row"><span><strong>Next run</strong><small>{priceStatus?.nextRunAt ? new Date(priceStatus.nextRunAt).toLocaleString('en-IN') : 'Manual only'}</small></span><span>IST</span></div>
+          </div>
+          <div className="tool-actions">
+            <button className="primary-button" disabled={busy !== null} onClick={() => void refreshPrices()}>{busy === 'prices' ? 'Refreshing…' : 'Refresh prices now'}</button>
+          </div>
         </section>
 
         <section className="panel tool-card tool-card--wide">
