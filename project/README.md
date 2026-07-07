@@ -11,6 +11,8 @@ Local-first stock portfolio and exit-plan tracker built with React, Vite, NestJS
 
 ```bash
 npm install
+npm run db:generate
+npm run db:migrate -- --name init
 npm run dev
 ```
 
@@ -34,7 +36,7 @@ npm run test:e2e
 npm run check
 ```
 
-`npm run check` runs lint, unit tests, and the production build. End-to-end tests remain separate because they open a local HTTP listener.
+`npm run check` runs lint, unit tests, Prisma schema validation, and the production build. End-to-end tests remain separate because they open a local HTTP listener.
 
 ## Workspace commands
 
@@ -42,5 +44,11 @@ npm run check
 - `npm run dev:backend` — start only Nest in watch mode
 - `npm run build:frontend` — build the React application into `backend/public`
 - `npm run build:backend` — compile Nest into `backend/dist`
+- `npm run db:validate` — validate the Prisma schema
+- `npm run db:generate` — generate the type-safe database client
+- `npm run db:migrate -- --name <name>` — create and apply a local SQLite migration
+- `npm run db:deploy` — apply committed migrations without creating new ones
 
 Generated builds, local databases, backups, environment files, and editor metadata are excluded from version control.
+
+The ledger model and fixed-point arithmetic rules are documented in [docs/trade-ledger.md](docs/trade-ledger.md).

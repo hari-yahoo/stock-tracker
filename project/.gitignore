@@ -13,6 +13,8 @@ coverage/
 *.sqlite-shm
 *.sqlite-wal
 *.db
+backend/data/*
+!backend/data/.gitkeep
 backups/
 
 # Local configuration and logs
@@ -25,4 +27,3 @@ backups/
 .DS_Store
 .idea/
 .vscode/
-
