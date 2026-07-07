@@ -6,7 +6,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { CreatePriceDto, PriceQueryDto } from './prices.dto';
+import {
+  CreateFxRateDto,
+  CreatePriceDto,
+  FxRateQueryDto,
+  PriceQueryDto,
+} from './prices.dto';
 import { PricesService } from './prices.service';
 
 @Controller('prices')
@@ -24,6 +29,16 @@ export class PricesController {
       throw new BadRequestException('instrumentId is required');
     }
     return this.prices.latest(query.instrumentId);
+  }
+
+  @Get('fx')
+  listFx(@Query() query: FxRateQueryDto) {
+    return this.prices.listFx(query);
+  }
+
+  @Post('fx')
+  createFx(@Body() dto: CreateFxRateDto) {
+    return this.prices.createFx(dto);
   }
 
   @Post()

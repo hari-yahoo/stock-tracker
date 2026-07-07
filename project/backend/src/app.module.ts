@@ -8,6 +8,7 @@ import { DatabaseModule } from './database/database.module';
 import { ExitPlansModule } from './exit-plans/exit-plans.module';
 import { InstrumentsModule } from './instruments/instruments.module';
 import { PricesModule } from './prices/prices.module';
+import { PortfolioModule } from './portfolio/portfolio.module';
 import { TradesModule } from './trades/trades.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { TradesModule } from './trades/trades.module';
     TradesModule,
     PricesModule,
     ExitPlansModule,
+    PortfolioModule,
   ],
   controllers: [AppController],
   providers: [AppService],

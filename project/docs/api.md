@@ -67,9 +67,17 @@ Trades cannot be edited or deleted. Voiding preserves the audit record. A BUY wi
 - `GET /prices?instrumentId=`
 - `GET /prices/latest?instrumentId=`
 - `POST /prices`
+- `GET /prices/fx?baseCurrency=USD&quoteCurrency=INR`
+- `POST /prices/fx`
 
 ```json
 { "instrumentId": "uuid", "price": "1688.50", "source": "MANUAL" }
+```
+
+FX rates use up to nine decimal places and mean quote currency per one base currency:
+
+```json
+{ "baseCurrency": "USD", "quoteCurrency": "INR", "rate": "83.125" }
 ```
 
 ## Exit plans
@@ -88,3 +96,21 @@ Trades cannot be edited or deleted. Voiding preserves the audit record. A BUY wi
   "rationale": "Exit after the expected earnings rerating."
 }
 ```
+
+## Portfolio
+
+- `GET /portfolio?asOf=&reportingCurrency=INR` — full snapshot
+- `GET /portfolio/summary?asOf=&reportingCurrency=INR`
+- `GET /portfolio/holdings?asOf=&reportingCurrency=INR`
+- `GET /portfolio/alerts?asOf=&reportingCurrency=INR`
+
+The projection derives open quantities, fee-inclusive average cost, realized P/L, unrealized P/L, and current values from posted trades and lot allocations. `asOf` defaults to now.
+
+Alerts are emitted independently:
+
+- `TARGET_HIT` when current price is greater than or equal to target price.
+- `APPROACHING` from seven through one UTC calendar days before the target.
+- `DUE_TODAY` on the target UTC calendar date.
+- `OVERDUE` after the target date.
+
+Missing price and FX data appears in `warnings`. Affected consolidated values are `null`; the API never treats missing values as zero.

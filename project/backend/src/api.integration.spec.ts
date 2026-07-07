@@ -9,6 +9,7 @@ import { PrismaService } from './database/prisma.service';
 import { ExitPlansService } from './exit-plans/exit-plans.service';
 import { InstrumentsService } from './instruments/instruments.service';
 import { PricesService } from './prices/prices.service';
+import { PortfolioService } from './portfolio/portfolio.service';
 import { TradesService } from './trades/trades.service';
 
 describe('ledger API services', () => {
@@ -48,6 +49,7 @@ describe('ledger API services', () => {
     const trades = new TradesService(prisma);
     const prices = new PricesService(prisma);
     const plans = new ExitPlansService(prisma);
+    const portfolio = new PortfolioService(prisma);
 
     const account = await accounts.create({
       name: 'Zerodha',
@@ -73,8 +75,8 @@ describe('ledger API services', () => {
 
     const plan = await plans.create({
       openingTradeId: buy.id,
-      targetPrice: '1800',
-      targetDate: '2027-01-31T00:00:00.000Z',
+      targetPrice: '1600',
+      targetDate: '2026-12-05T00:00:00.000Z',
       rationale: 'Expected earnings rerating.',
     });
     expect(plan.status).toBe(ExitPlanStatus.ACTIVE);
@@ -82,6 +84,7 @@ describe('ledger API services', () => {
     const price = await prices.create({
       instrumentId: instrument.id,
       price: '1688.50',
+      capturedAt: '2026-07-07T10:00:00.000Z',
     });
     expect(price.price).toBe('1688.5');
 
@@ -95,6 +98,71 @@ describe('ledger API services', () => {
       allocations: [{ openingTradeId: buy.id, quantity: '4' }],
     });
     expect(sell.closingAllocations).toHaveLength(1);
+
+    const snapshot = await portfolio.snapshot({
+      asOf: '2026-12-01T10:00:00.000Z',
+      reportingCurrency: 'INR',
+    });
+    expect(snapshot.holdings).toHaveLength(1);
+    expect(snapshot.holdings[0]).toMatchObject({
+      quantity: '6.5',
+      costBasis: '9764.005952',
+      currentValue: '10975.25',
+      unrealizedPnl: '1211.244048',
+    });
+    expect(snapshot.summary.reportingTotals).toEqual({
+      costBasis: '9764.005952',
+      currentValue: '10975.25',
+      unrealizedPnl: '1211.244048',
+      realizedPnl: '791.380952',
+    });
+    expect(snapshot.alerts.map((alert) => alert.type)).toEqual([
+      'TARGET_HIT',
+      'APPROACHING',
+    ]);
+
+    const usdAccount = await accounts.create({
+      name: 'Interactive Brokers',
+      reportingCurrency: 'INR',
+    });
+    const usdInstrument = await instruments.create({
+      symbol: 'AAPL',
+      exchange: 'NASDAQ',
+      quoteCurrency: 'USD',
+    });
+    await trades.create({
+      accountId: usdAccount.id,
+      instrumentId: usdInstrument.id,
+      side: TradeSide.BUY,
+      quantity: '1',
+      price: '100',
+      executedAt: '2026-07-07T09:30:00.000Z',
+    });
+    await prices.create({
+      instrumentId: usdInstrument.id,
+      price: '110',
+      capturedAt: '2026-07-07T10:00:00.000Z',
+    });
+    expect(
+      await prices.createFx({
+        baseCurrency: 'USD',
+        quoteCurrency: 'INR',
+        rate: '83.125',
+        capturedAt: '2026-07-07T10:00:00.000Z',
+      }),
+    ).toMatchObject({ rate: '83.125' });
+
+    const multiCurrency = await portfolio.snapshot({
+      asOf: '2026-12-01T10:00:00.000Z',
+      reportingCurrency: 'INR',
+    });
+    expect(multiCurrency.summary.accountCount).toBe(2);
+    expect(multiCurrency.summary.reportingTotals).toEqual({
+      costBasis: '18076.505952',
+      currentValue: '20119',
+      unrealizedPnl: '2042.494048',
+      realizedPnl: '791.380952',
+    });
 
     await expect(
       trades.create({
@@ -114,5 +182,24 @@ describe('ledger API services', () => {
     const voidedBuy = await trades.void(buy.id);
     expect(voidedBuy.status).toBe('VOIDED');
     expect((await plans.get(plan.id)).status).toBe(ExitPlanStatus.CANCELLED);
+
+    // Make the voids later than the requested historical snapshot.
+    await prisma.trade.updateMany({
+      where: { id: { in: [buy.id, sell.id] } },
+      data: { voidedAt: new Date('2026-12-02T10:00:00.000Z') },
+    });
+
+    const historicalSnapshot = await portfolio.snapshot({
+      asOf: '2026-12-01T10:00:00.000Z',
+      reportingCurrency: 'INR',
+    });
+    expect(
+      historicalSnapshot.holdings.find(
+        (holding) => holding.instrument.symbol === 'INFY',
+      )?.quantity,
+    ).toBe('6.5');
+    expect(historicalSnapshot.summary.reportingTotals.realizedPnl).toBe(
+      '791.380952',
+    );
   });
 });
