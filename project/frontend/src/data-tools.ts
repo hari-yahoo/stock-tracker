@@ -3,6 +3,7 @@ export interface ImportResult {
   importedTrades: number
   createdAccounts: number
   createdInstruments: number
+  warnings?: string[]
 }
 
 export interface BackupEntry {
@@ -26,6 +27,20 @@ export async function importTrades(file: File, dryRun: boolean) {
     method: 'POST',
     headers: { 'Content-Type': 'text/csv' },
     body: await file.text(),
+  })
+  if (!response.ok) throw await apiError(response)
+  return (await response.json()) as ImportResult
+}
+
+export async function importIciciDirectTrades(file: File, dryRun: boolean) {
+
+  const fileContent = await file.text();
+  console.log('Importing ICICI Direct trades:', fileContent.length);
+
+  const response = await fetch(`/api/data/icici-direct.csv?dryRun=${dryRun}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ csv: fileContent }),
   })
   if (!response.ok) throw await apiError(response)
   return (await response.json()) as ImportResult

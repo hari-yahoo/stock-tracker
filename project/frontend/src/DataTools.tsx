@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createBackup,
+  importIciciDirectTrades,
   importTrades,
   listBackups,
   restoreBackup,
@@ -15,6 +16,7 @@ function fileSize(bytes: number) {
 
 export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
   const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [iciciFile, setIciciFile] = useState<File | null>(null)
   const [restoreFile, setRestoreFile] = useState<File | null>(null)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [backups, setBackups] = useState<BackupEntry[]>([])
@@ -51,6 +53,32 @@ export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
     } catch (error) {
       setImportResult(null)
       setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Import failed.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function runIciciImport(dryRun: boolean) {
+    if (!iciciFile) return
+    setBusy(dryRun ? 'icici-validate' : 'icici-import')
+    setMessage(null)
+    try {
+      const result = await importIciciDirectTrades(iciciFile, dryRun)
+      setImportResult(result)
+      const warningSuffix =
+        result.warnings && result.warnings.length
+          ? ` ${result.warnings.length} warning${result.warnings.length > 1 ? 's' : ''} found.`
+          : ''
+      setMessage({
+        tone: 'success',
+        text: dryRun
+          ? `ICICIDirect validation passed for ${result.importedTrades} trade rows.${warningSuffix}`
+          : `Imported ${result.importedTrades} ICICIDirect trades successfully.${warningSuffix}`,
+      })
+      if (!dryRun) onDataChanged()
+    } catch (error) {
+      setImportResult(null)
+      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'ICICIDirect import failed.' })
     } finally {
       setBusy(null)
     }
@@ -114,6 +142,21 @@ export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
           <div className="tool-actions">
             <button className="secondary-button" disabled={!csvFile || busy !== null} onClick={() => void runImport(true)}>{busy === 'validate' ? 'Validating…' : 'Validate only'}</button>
             <button className="primary-button" disabled={!csvFile || busy !== null} onClick={() => void runImport(false)}>{busy === 'import' ? 'Importing…' : 'Import trades'}</button>
+          </div>
+        </section>
+
+        <section className="panel tool-card">
+          <div className="tool-card__heading"><span>Broker import</span><h2>Import ICICIDirect transactions</h2><p>Loads buys and sells, combines fees, and applies FIFO lot allocation automatically.</p></div>
+          <label className="file-drop">
+            <input type="file" accept=".csv,text/csv" onChange={(event) => { setIciciFile(event.target.files?.[0] ?? null); setImportResult(null) }} />
+            <span className="file-drop__icon">⇪</span>
+            <strong>{iciciFile ? iciciFile.name : 'Choose ICICIDirect CSV'}</strong>
+            <small>{iciciFile ? fileSize(iciciFile.size) : 'All transactions export · up to 10 MB'}</small>
+          </label>
+          {importResult && importResult.warnings && importResult.warnings.length > 0 && <div className="import-warnings"><strong>{importResult.warnings.length} import warnings</strong><ul>{importResult.warnings.slice(0, 4).map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}
+          <div className="tool-actions">
+            <button className="secondary-button" disabled={!iciciFile || busy !== null} onClick={() => void runIciciImport(true)}>{busy === 'icici-validate' ? 'Validating…' : 'Validate only'}</button>
+            <button className="primary-button" disabled={!iciciFile || busy !== null} onClick={() => void runIciciImport(false)}>{busy === 'icici-import' ? 'Importing…' : 'Import ICICIDirect CSV'}</button>
           </div>
         </section>
 

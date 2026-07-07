@@ -7,6 +7,7 @@ import { ExitPlanStatus, TradeSide } from '@prisma/client';
 import { AccountsService } from './accounts/accounts.service';
 import { AiPromptsService } from './ai-prompts/ai-prompts.service';
 import { BackupsService } from './backups/backups.service';
+import { decimalOutput } from './common/api';
 import { DataTransferService } from './data-transfer/data-transfer.service';
 import { PrismaService } from './database/prisma.service';
 import { ExitPlansService } from './exit-plans/exit-plans.service';
@@ -233,6 +234,33 @@ describe('ledger API services', () => {
       importedTrades: 1,
     });
     expect((await transfer.exportTrades()).toString()).toContain('CSV Account');
+
+    const iciciCsv = [
+      'Stock Symbol,Company Name,ISIN Code,Action,Quantity,Transaction Price,Brokerage,Transaction Charges,StampDuty,Segment,STT Paid/Not Paid,Remarks,Transaction Date,Exchange,',
+      'ICICI,ICICI BANK LIMITED,INE090A01021,Buy,10,100,1,0.5,0.2,TT,STT Paid,icicidirect,01-Jul-2024,NSE,',
+      'ICICI,ICICI BANK LIMITED,INE090A01021,Buy,5,120,1,0.5,0.2,TT,STT Paid,Split/bonus,02-Jul-2024,NSE,',
+      'ICICI,ICICI BANK LIMITED,INE090A01021,Sell,8,130,1,0.5,0,TT,STT Paid,icicidirect,03-Jul-2024,NSE,',
+      '',
+    ].join('\r\n');
+    expect(await transfer.importIciciDirectTrades(iciciCsv, true)).toMatchObject({
+      dryRun: true,
+      importedTrades: 3,
+      createdAccounts: 1,
+      createdInstruments: 1,
+      warnings: ['Row 3: corporate action imported as a zero- or stated-cost BUY row'],
+    });
+    expect(await transfer.importIciciDirectTrades(iciciCsv, false)).toMatchObject({
+      dryRun: false,
+      importedTrades: 3,
+    });
+    const importedIciciTrades = await prisma.trade.findMany({
+      where: { externalReference: { startsWith: 'ICICIDIRECT:' } },
+      include: { closingAllocations: true },
+      orderBy: { executedAt: 'asc' },
+    });
+    expect(importedIciciTrades).toHaveLength(3);
+    expect(importedIciciTrades[2].closingAllocations).toHaveLength(1);
+    expect(decimalOutput(importedIciciTrades[2].feesMicros)).toBe('1.5');
 
     const generatedPrompt = await new AiPromptsService(
       portfolio,

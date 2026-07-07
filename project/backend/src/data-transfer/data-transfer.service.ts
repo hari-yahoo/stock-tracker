@@ -28,11 +28,29 @@ const HEADERS = [
   'allocations',
 ];
 
+const ICICI_HEADERS = [
+  'stock symbol',
+  'company name',
+  'isin code',
+  'action',
+  'quantity',
+  'transaction price',
+  'brokerage',
+  'transaction charges',
+  'stampduty',
+  'segment',
+  'stt paid/not paid',
+  'remarks',
+  'transaction date',
+  'exchange',
+];
+
 export interface ImportResult {
   dryRun: boolean;
   importedTrades: number;
   createdAccounts: number;
   createdInstruments: number;
+  warnings?: string[];
 }
 
 class DryRunRollback extends Error {
@@ -48,6 +66,43 @@ function rowObject(
   return Object.fromEntries(
     headers.map((header, index) => [header, values[index] ?? '']),
   );
+}
+
+function parseIciciDate(value: string): Date {
+  const trimmed = value.trim();
+  const match = /^(\d{2})-([A-Za-z]{3})-(\d{4})$/.exec(trimmed);
+  if (!match) {
+    throw new BadRequestException(
+      'transaction date must be in DD-MMM-YYYY format',
+    );
+  }
+  const months = [
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
+  ];
+  const monthIndex = months.indexOf(match[2].toUpperCase());
+  if (monthIndex === -1) {
+    throw new BadRequestException(
+      'transaction date must contain a valid month abbreviation',
+    );
+  }
+  const date = new Date(
+    Date.UTC(Number(match[3]), monthIndex, Number(match[1]), 12, 0, 0),
+  );
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException('transaction date is invalid');
+  }
+  return date;
 }
 
 @Injectable()
@@ -161,6 +216,91 @@ export class DataTransferService {
     }
   }
 
+  async importIciciDirectTrades(
+    csv: string,
+    dryRun: boolean,
+  ): Promise<ImportResult> {
+    if (!csv.trim()) throw new BadRequestException('CSV file is empty');
+    let rows: string[][];
+    try {
+      rows = parseCsv(csv);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid CSV',
+      );
+    }
+    if (rows.length < 2) throw new BadRequestException('CSV has no trade rows');
+    const headers = rows[0].map((header) => header.trim().toLowerCase());
+    const missing = ICICI_HEADERS.filter((header) => !headers.includes(header));
+    if (missing.length) {
+      throw new BadRequestException(
+        `ICICIDirect CSV is missing columns: ${missing.join(', ')}`,
+      );
+    }
+
+    const parsedRows = rows
+      .slice(1)
+      .filter((row) => row.some((cell) => cell.trim() !== ''))
+      .map((values, index) => {
+        const row = rowObject(headers, values);
+        return {
+          line: index + 2,
+          row,
+          date: parseIciciDate(row['transaction date'] || ''),
+        };
+      })
+      .sort((left, right) => {
+        const byDate = left.date.getTime() - right.date.getTime();
+        if (byDate !== 0) return byDate;
+        const leftAction = normalizeCode(left.row.action || '');
+        const rightAction = normalizeCode(right.row.action || '');
+        if (leftAction !== rightAction) {
+          return leftAction === TradeSide.BUY ? -1 : 1;
+        }
+        return left.line - right.line;
+      });
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const initialAccounts = await tx.account.count();
+        const initialInstruments = await tx.instrument.count();
+        const warnings: string[] = [];
+        let importedTrades = 0;
+
+        for (const entry of parsedRows) {
+          try {
+            const warning = await this.importIciciDirectRow(
+              tx,
+              entry.row,
+              entry.line,
+              entry.date,
+            );
+            importedTrades += 1;
+            if (warning) warnings.push(`Row ${entry.line}: ${warning}`);
+          } catch (error) {
+            throw new BadRequestException(
+              `CSV row ${entry.line}: ${error instanceof Error ? error.message : 'invalid trade'}`,
+            );
+          }
+        }
+
+        const result = {
+          dryRun,
+          importedTrades,
+          createdAccounts: (await tx.account.count()) - initialAccounts,
+          createdInstruments:
+            (await tx.instrument.count()) - initialInstruments,
+          warnings,
+        };
+        if (dryRun) throw new DryRunRollback(result);
+        return result;
+      });
+    } catch (error) {
+      if (error instanceof DryRunRollback) return error.result;
+      throw error;
+    }
+  }
+
   private async importRow(
     tx: Prisma.TransactionClient,
     row: Record<string, string>,
@@ -241,5 +381,133 @@ export class DataTransferService {
         },
       });
     }
+  }
+
+  private async importIciciDirectRow(
+    tx: Prisma.TransactionClient,
+    row: Record<string, string>,
+    line: number,
+    executedAt: Date,
+  ): Promise<string | null> {
+    const symbol = normalizeCode(row['stock symbol'] || '');
+    const exchange = normalizeCode(row.exchange || '');
+    const action = normalizeCode(row.action || '');
+    const accountName = 'ICICIDirect';
+    if (!symbol || !exchange) {
+      throw new Error('stock symbol and exchange are required');
+    }
+    if (action !== TradeSide.BUY && action !== TradeSide.SELL) {
+      throw new Error('action must be Buy or Sell');
+    }
+
+    const account = await tx.account.upsert({
+      where: { name: accountName },
+      create: { name: accountName, reportingCurrency: 'INR' },
+      update: {},
+    });
+    const instrument = await tx.instrument.upsert({
+      where: { symbol_exchange: { symbol, exchange } },
+      create: {
+        symbol,
+        exchange,
+        name: row['company name']?.trim() || null,
+        quoteCurrency: 'INR',
+      },
+      update: {
+        name: row['company name']?.trim() || undefined,
+      },
+    });
+
+    const quantityMicros = positiveDecimalInput(row.quantity, 'quantity');
+    const priceMicros = nonNegativeDecimalInput(
+      row['transaction price'],
+      'transaction price',
+    );
+    const feesMicros =
+      nonNegativeDecimalInput(row.brokerage || '0', 'brokerage') +
+      nonNegativeDecimalInput(
+        row['transaction charges'] || '0',
+        'transaction charges',
+      ) +
+      nonNegativeDecimalInput(row.stampduty || '0', 'stampduty');
+
+    const remarks = row.remarks?.trim() || '';
+    const notes = [
+      'Imported from ICICIDirect transactions CSV',
+      row.segment?.trim() ? `segment: ${row.segment.trim()}` : '',
+      row['stt paid/not paid']?.trim()
+        ? `stt: ${row['stt paid/not paid'].trim()}`
+        : '',
+      remarks ? `remarks: ${remarks}` : '',
+      row['isin code']?.trim() ? `isin: ${row['isin code'].trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+    const externalReference = `ICICIDIRECT:${line}`;
+
+    const trade = await tx.trade.create({
+      data: {
+        accountId: account.id,
+        instrumentId: instrument.id,
+        side: action,
+        quantityMicros,
+        priceMicros,
+        feesMicros,
+        executedAt,
+        externalReference,
+        notes,
+      },
+    });
+
+    if (action === TradeSide.BUY) {
+      if (/split|bonus/i.test(remarks)) {
+        return 'corporate action imported as a zero- or stated-cost BUY row';
+      }
+      return null;
+    }
+
+    const openBuys = await tx.trade.findMany({
+      where: {
+        accountId: account.id,
+        instrumentId: instrument.id,
+        side: TradeSide.BUY,
+        status: TradeStatus.POSTED,
+        executedAt: { lte: executedAt },
+      },
+      include: {
+        openingAllocations: {
+          where: { closingTrade: { status: TradeStatus.POSTED } },
+        },
+      },
+      orderBy: [{ executedAt: 'asc' }, { recordedAt: 'asc' }, { id: 'asc' }],
+    });
+
+    let remaining = quantityMicros;
+    for (const buy of openBuys) {
+      const allocated = buy.openingAllocations.reduce(
+        (sum, allocation) => sum + allocation.quantityMicros,
+        0n,
+      );
+      const available = buy.quantityMicros - allocated;
+      if (available <= 0n) continue;
+      const allocatedNow = available < remaining ? available : remaining;
+      await tx.lotAllocation.create({
+        data: {
+          openingTradeId: buy.id,
+          closingTradeId: trade.id,
+          quantityMicros: allocatedNow,
+        },
+      });
+      remaining -= allocatedNow;
+      if (remaining === 0n) break;
+    }
+
+    if (remaining > 0n) {
+      throw new Error(
+        `sell quantity exceeds available BUY lots by ${decimalOutput(remaining)}`,
+      );
+    }
+
+    return null;
   }
 }
