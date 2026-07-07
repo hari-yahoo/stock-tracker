@@ -4,6 +4,11 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Nest serves this directory in production.
+    outDir: "../backend/public",
+    emptyOutDir: true,
+  },
   server: {
     proxy: {
       "/api": {

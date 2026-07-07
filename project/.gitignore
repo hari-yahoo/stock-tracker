@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Generated application output
+frontend/dist/
+backend/dist/
+backend/public/
+coverage/
+*.tsbuildinfo
+
+# Local data and backups
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+backups/
+
+# Local configuration and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+
