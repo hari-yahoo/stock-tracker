@@ -114,3 +114,17 @@ Alerts are emitted independently:
 - `OVERDUE` after the target date.
 
 Missing price and FX data appears in `warnings`. Affected consolidated values are `null`; the API never treats missing values as zero.
+
+## Import, export, and backups
+
+- `GET /data/trades.csv` — download all posted trades as CSV.
+- `POST /data/trades.csv?dryRun=true` — validate a CSV using a rolled-back transaction.
+- `POST /data/trades.csv?dryRun=false` — atomically import the complete CSV.
+- `GET /backups` — list locally retained snapshots.
+- `POST /backups` — create a local snapshot; accepts an optional `{ "label": "before-import" }`.
+- `GET /backups/download` — download a consistent SQLite snapshot.
+- `POST /backups/restore` — restore an `application/octet-stream` SQLite backup.
+
+CSV imports use the same columns produced by the export endpoint. Rows must be ordered with BUY trades before SELL trades that allocate to them. The `allocations` column uses `opening-trade-id:quantity` entries separated by `|`.
+
+Restore runs SQLite integrity and required-table checks before replacing data. A `pre-restore` rollback snapshot is always retained locally.

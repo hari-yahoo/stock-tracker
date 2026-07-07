@@ -4,7 +4,9 @@ import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AccountsModule } from './accounts/accounts.module';
+import { BackupsModule } from './backups/backups.module';
 import { DatabaseModule } from './database/database.module';
+import { DataTransferModule } from './data-transfer/data-transfer.module';
 import { ExitPlansModule } from './exit-plans/exit-plans.module';
 import { InstrumentsModule } from './instruments/instruments.module';
 import { PricesModule } from './prices/prices.module';
@@ -24,6 +26,8 @@ import { TradesModule } from './trades/trades.module';
     PricesModule,
     ExitPlansModule,
     PortfolioModule,
+    DataTransferModule,
+    BackupsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
