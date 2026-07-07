@@ -68,10 +68,55 @@ td { height: 73px; padding: 0 14px; border-top: 1px solid var(--line); color: va
 .backup-list { margin-top: 20px; border-top: 1px solid var(--line); }.backup-list__title { padding: 16px 0 9px; display: flex; justify-content: space-between; color: var(--ink); font-size: 11px; }.backup-list__title span { color: var(--muted); }.backup-row { padding: 10px 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }.backup-row > span:first-child { min-width: 0; display: grid; gap: 2px; }.backup-row strong { overflow: hidden; color: var(--ink); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }.backup-row small { color: var(--muted); font-size: 8px; }.backup-empty { margin: 15px 0 3px; color: var(--muted); font-size: 10px; }
 .tool-card--danger { border-color: color-mix(in srgb, var(--red) 22%, var(--line)); }.tool-card--danger .tool-card__heading > span { color: var(--red); }.compact-file { height: 43px; margin-top: 20px; padding: 0 13px; display: flex; align-items: center; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: var(--canvas); cursor: pointer; font-size: 10px; }.compact-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.safety-note { display: block; margin-top: 9px; color: var(--muted); font-size: 8px; text-align: center; }
 
+.holdings-page .page-header { margin-bottom: 24px; }
+.holdings-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.summary-tile { min-height: 126px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, white), var(--surface)); box-shadow: var(--shadow); }
+.summary-tile span { display: block; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .55px; text-transform: uppercase; }
+.summary-tile strong { display: block; margin-top: 12px; color: var(--ink); font: 700 clamp(22px, 2vw, 30px)/1 'Avenir Next', sans-serif; letter-spacing: -.8px; }
+.summary-tile small { display: block; margin-top: 12px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.summary-value--positive { color: var(--green); }
+.summary-value--negative { color: var(--red); }
+.holdings-workspace { overflow: visible; }
+.holdings-toolbar { align-items: start; gap: 20px; }
+.holdings-controls { display: grid; grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(160px, .8fr)); gap: 12px; flex: 1; }
+.search-field, .filter-field { display: grid; gap: 7px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .45px; text-transform: uppercase; }
+.search-field input, .filter-field select { height: 42px; padding: 0 13px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: var(--surface); font: inherit; text-transform: none; letter-spacing: normal; }
+.sort-pills { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.sort-pills button, .sortable-heading { border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.sort-pills button { height: 34px; padding: 0 12px; border-radius: 999px; color: var(--muted); background: var(--canvas); font-size: 11px; font-weight: 700; }
+.sort-pills button.active { color: #fff; background: var(--green-dark); }
+.sortable-heading { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: inherit; font-weight: inherit; letter-spacing: inherit; text-transform: inherit; }
+.holdings-grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, .9fr); align-items: start; }
+.holdings-table-wrap { border-top: 1px solid var(--line); }
+.holdings-table tbody tr { cursor: pointer; }
+.holdings-table tbody tr.is-selected { background: color-mix(in srgb, var(--green-soft) 78%, white); }
+.holding-detail { position: sticky; top: 24px; min-width: 0; padding: 22px; border-left: 1px solid var(--line); background: linear-gradient(180deg, color-mix(in srgb, var(--green-soft) 30%, var(--surface)), var(--surface) 36%); }
+.holding-detail__hero h3 { margin: 0; color: var(--ink); font: 700 28px/1 'Avenir Next', sans-serif; letter-spacing: -.9px; }
+.holding-detail__hero p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.holding-stat-list { margin: 18px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.holding-stat-list div, .holding-valuation, .lot-card { border: 1px solid color-mix(in srgb, var(--line) 92%, white); border-radius: 12px; background: rgba(255,255,255,.7); }
+.holding-stat-list div { padding: 12px; }
+.holding-stat-list dt { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .45px; text-transform: uppercase; }
+.holding-stat-list dd { margin: 7px 0 0; color: var(--ink); font-size: 12px; font-weight: 700; }
+.holding-valuation { margin-top: 14px; padding: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.holding-valuation span { display: block; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .45px; text-transform: uppercase; }
+.holding-valuation strong { display: block; margin-top: 8px; color: var(--ink); font: 700 20px/1.1 'Avenir Next', sans-serif; letter-spacing: -.6px; }
+.holding-lots { margin-top: 18px; }
+.holding-lots__heading { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+.holding-lots__heading h4 { margin: 0; color: var(--ink); font-size: 14px; }
+.holding-lots__heading span { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; color: var(--green); background: var(--green-soft); font-size: 11px; font-weight: 800; }
+.lot-card { padding: 14px; display: grid; gap: 8px; margin-top: 10px; }
+.lot-card strong { color: var(--ink); font-size: 12px; }
+.lot-card small { color: var(--muted); font-size: 10px; }
+.lot-card div { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 10px; }
+.lot-card b { color: var(--ink); font-size: 11px; }
+.holdings-empty-state { min-height: 280px; }
+
 @media (max-width: 1120px) {
   .app-shell { grid-template-columns: 76px minmax(0, 1fr); }.sidebar { padding-inline: 12px; }.brand { justify-content: center; padding: 0; }.brand > span:last-child, .sidebar nav span, .settings-link span, .profile-card > span:last-child { display: none; }.sidebar nav button, .settings-link { justify-content: center; padding: 0; }.nav-indicator { right: -12px; }.profile-card { justify-content: center; padding-inline: 0; }
   .metrics-grid { grid-template-columns: repeat(2, 1fr); }.dashboard-grid { grid-template-columns: 1fr; }.alerts-panel { min-height: auto; }.quiet-state { min-height: 210px; }
   .data-tools-grid { grid-template-columns: 1fr; }
+  .holdings-summary { grid-template-columns: repeat(2, 1fr); }.holdings-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }.holdings-grid { grid-template-columns: 1fr; }.holding-detail { position: static; border-left: 0; border-top: 1px solid var(--line); }
 }
 
 @media (max-width: 720px) {
@@ -80,4 +125,5 @@ td { height: 73px; padding: 0 14px; border-top: 1px solid var(--line); color: va
   .metrics-grid { grid-template-columns: 1fr; }.metric-card { min-height: 134px; }.dashboard-grid { margin-top: 14px; }.panel-heading { min-height: 76px; }.holdings-panel { margin-inline: -16px; border-radius: 0; }.alerts-panel { border-radius: 12px; }
   th, td { padding-inline: 11px; } th:first-child, td:first-child { padding-left: 16px; }.loading-metrics { grid-template-columns: 1fr; }
   .data-page .page-header { display: block; }.data-tools-grid { gap: 13px; }.tool-card { padding: 20px; }.tool-actions, .backup-actions { flex-direction: column; }.tool-actions > *, .backup-actions > * { width: 100%; }
+  .holdings-summary { grid-template-columns: 1fr; }.holdings-toolbar { display: block; }.holdings-controls { grid-template-columns: 1fr; margin-top: 14px; }.sort-pills { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }.holdings-workspace { margin-inline: -16px; border-radius: 0; }.holding-detail { padding: 18px 16px 20px; }.holding-stat-list, .holding-valuation { grid-template-columns: 1fr; }
 }

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode, SVGProps } from 'react'
 import { AiInsights } from './AiInsights'
 import { DataTools } from './DataTools'
+import { HoldingsScreen } from './HoldingsScreen'
 import { getPortfolio } from './portfolio'
 import type { Holding, PortfolioAlert, PortfolioSnapshot } from './portfolio'
+import { formatDate, formatMoney, formatQuantity, pnlTone, scaledToFixed } from './portfolio-format'
 import './App.css'
 
 type IconProps = SVGProps<SVGSVGElement>
@@ -79,49 +81,11 @@ const icons = {
 
 const navItems = [
   { label: 'Dashboard', icon: icons.dashboard, view: 'dashboard' as const },
-  { label: 'Holdings', icon: icons.holdings },
+  { label: 'Holdings', icon: icons.holdings, view: 'holdings' as const },
   { label: 'Transactions', icon: icons.history },
   { label: 'AI Insights', icon: icons.spark, view: 'ai' as const },
   { label: 'Data & backups', icon: icons.settings, view: 'data' as const },
 ]
-
-function scaledToFixed(value: string, digits = 2) {
-  const negative = value.startsWith('-')
-  const normalized = negative ? value.slice(1) : value
-  const [whole = '0', fraction = ''] = normalized.split('.')
-  const scale = 10n ** BigInt(digits)
-  const sourceScale = 10n ** BigInt(fraction.length)
-  const source = BigInt(whole) * sourceScale + BigInt(fraction || '0')
-  const rounded = (source * scale + sourceScale / 2n) / sourceScale
-  const roundedWhole = rounded / scale
-  const roundedFraction = (rounded % scale).toString().padStart(digits, '0')
-  const grouped = roundedWhole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return `${negative ? '-' : ''}${grouped}.${roundedFraction}`
-}
-
-function formatMoney(value: string | null, currency = 'INR') {
-  if (value === null) return '—'
-  const symbols: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£' }
-  return `${symbols[currency] ?? `${currency} `}${scaledToFixed(value)}`
-}
-
-function formatQuantity(value: string) {
-  const [whole, fraction = ''] = value.split('.')
-  return fraction ? `${whole}.${fraction.slice(0, 4).replace(/0+$/, '')}` : whole
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(value))
-}
-
-function pnlTone(value: string | null) {
-  if (!value) return 'neutral'
-  return value.startsWith('-') ? 'negative' : 'positive'
-}
 
 function MetricCard({
   eyebrow,
@@ -322,7 +286,7 @@ function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; o
 }
 
 function App() {
-  const [view, setView] = useState<'dashboard' | 'ai' | 'data'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'holdings' | 'ai' | 'data'>('dashboard')
   const [data, setData] = useState<PortfolioSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(true)
@@ -401,7 +365,11 @@ function App() {
             </div>
           </main>
         ) : data ? (
-          <Dashboard data={data} onRefresh={() => void load()} refreshing={refreshing} />
+          view === 'holdings' ? (
+            <HoldingsScreen data={data} onRefresh={() => void load()} refreshing={refreshing} />
+          ) : (
+            <Dashboard data={data} onRefresh={() => void load()} refreshing={refreshing} />
+          )
         ) : (
           <main className="main-content loading-state" aria-label="Loading portfolio">
             <div className="loading-header" />
