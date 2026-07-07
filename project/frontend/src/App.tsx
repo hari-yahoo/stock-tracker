@@ -3,6 +3,7 @@ import type { ReactNode, SVGProps } from 'react'
 import { AiInsights } from './AiInsights'
 import { DataTools } from './DataTools'
 import { HoldingsScreen } from './HoldingsScreen'
+import { TransactionsScreen } from './TransactionsScreen'
 import { getPortfolio } from './portfolio'
 import type { Holding, PortfolioAlert, PortfolioSnapshot } from './portfolio'
 import { formatDate, formatMoney, formatQuantity, pnlTone, scaledToFixed } from './portfolio-format'
@@ -82,7 +83,7 @@ const icons = {
 const navItems = [
   { label: 'Dashboard', icon: icons.dashboard, view: 'dashboard' as const },
   { label: 'Holdings', icon: icons.holdings, view: 'holdings' as const },
-  { label: 'Transactions', icon: icons.history },
+  { label: 'Transactions', icon: icons.history, view: 'transactions' as const },
   { label: 'AI Insights', icon: icons.spark, view: 'ai' as const },
   { label: 'Data & backups', icon: icons.settings, view: 'data' as const },
 ]
@@ -286,7 +287,7 @@ function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; o
 }
 
 function App() {
-  const [view, setView] = useState<'dashboard' | 'holdings' | 'ai' | 'data'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'holdings' | 'transactions' | 'ai' | 'data'>('dashboard')
   const [data, setData] = useState<PortfolioSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(true)
@@ -353,6 +354,8 @@ function App() {
       <div className="workspace" id="top">
         {view === 'ai' ? (
           <AiInsights />
+        ) : view === 'transactions' ? (
+          <TransactionsScreen />
         ) : view === 'data' ? (
           <DataTools onDataChanged={() => void load()} />
         ) : error && !data ? (
