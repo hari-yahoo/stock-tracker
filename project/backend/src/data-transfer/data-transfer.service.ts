@@ -45,6 +45,15 @@ const ICICI_HEADERS = [
   'exchange',
 ];
 
+const ZERODHA_HOLDINGS_HEADERS = [
+  'symbol',
+  'isin',
+  'transaction date',
+  'transaction type',
+  'quantity',
+  'price',
+];
+
 export interface ImportResult {
   dryRun: boolean;
   importedTrades: number;
@@ -100,6 +109,28 @@ function parseIciciDate(value: string): Date {
     Date.UTC(Number(match[3]), monthIndex, Number(match[1]), 12, 0, 0),
   );
   if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException('transaction date is invalid');
+  }
+  return date;
+}
+
+function parseZerodhaDate(value: string): Date {
+  const trimmed = value.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) {
+    throw new BadRequestException(
+      'transaction date must be in YYYY-MM-DD format',
+    );
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
     throw new BadRequestException('transaction date is invalid');
   }
   return date;
@@ -291,6 +322,75 @@ export class DataTransferService {
           createdInstruments:
             (await tx.instrument.count()) - initialInstruments,
           warnings,
+        };
+        if (dryRun) throw new DryRunRollback(result);
+        return result;
+      });
+    } catch (error) {
+      if (error instanceof DryRunRollback) return error.result;
+      throw error;
+    }
+  }
+
+  async importZerodhaHoldings(
+    csv: string,
+    dryRun: boolean,
+  ): Promise<ImportResult> {
+    if (!csv.trim()) throw new BadRequestException('CSV file is empty');
+    let rows: string[][];
+    try {
+      rows = parseCsv(csv);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid CSV',
+      );
+    }
+    if (rows.length < 2)
+      throw new BadRequestException('CSV has no holding rows');
+    const headers = rows[0].map((header) => header.trim().toLowerCase());
+    const missing = ZERODHA_HOLDINGS_HEADERS.filter(
+      (header) => !headers.includes(header),
+    );
+    if (missing.length) {
+      throw new BadRequestException(
+        `Zerodha holdings CSV is missing columns: ${missing.join(', ')}`,
+      );
+    }
+
+    const parsedRows = rows
+      .slice(1)
+      .map((values, index) => ({
+        line: index + 2,
+        row: rowObject(headers, values),
+      }))
+      .filter((entry) =>
+        Object.values(entry.row).some((cell) => cell.trim() !== ''),
+      );
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const initialAccounts = await tx.account.count();
+        const initialInstruments = await tx.instrument.count();
+        let importedTrades = 0;
+
+        for (const entry of parsedRows) {
+          try {
+            await this.importZerodhaHoldingRow(tx, entry.row, entry.line);
+            importedTrades += 1;
+          } catch (error) {
+            throw new BadRequestException(
+              `CSV row ${entry.line}: ${error instanceof Error ? error.message : 'invalid holding lot'}`,
+            );
+          }
+        }
+
+        const result = {
+          dryRun,
+          importedTrades,
+          createdAccounts: (await tx.account.count()) - initialAccounts,
+          createdInstruments:
+            (await tx.instrument.count()) - initialInstruments,
+          warnings: [],
         };
         if (dryRun) throw new DryRunRollback(result);
         return result;
@@ -509,5 +609,55 @@ export class DataTransferService {
     }
 
     return null;
+  }
+
+  private async importZerodhaHoldingRow(
+    tx: Prisma.TransactionClient,
+    row: Record<string, string>,
+    line: number,
+  ): Promise<void> {
+    const symbol = normalizeCode(row.symbol || '');
+    const isin = normalizeCode(row.isin || '');
+    const transactionType = normalizeCode(row['transaction type'] || '');
+    if (!symbol || !isin) throw new Error('symbol and ISIN are required');
+    if (!/^[A-Z0-9]{12}$/.test(isin)) {
+      throw new Error('ISIN must contain 12 letters or digits');
+    }
+    if (!['BUY', 'BONUS', 'SPLIT'].includes(transactionType)) {
+      throw new Error('transaction type must be BUY, BONUS, or SPLIT');
+    }
+
+    const account = await tx.account.upsert({
+      where: { name: 'Zerodha' },
+      create: { name: 'Zerodha', reportingCurrency: 'INR' },
+      update: {},
+    });
+    const instrument = await tx.instrument.upsert({
+      where: { symbol_exchange: { symbol, exchange: 'NSE' } },
+      create: {
+        symbol,
+        exchange: 'NSE',
+        quoteCurrency: 'INR',
+      },
+      update: {},
+    });
+
+    await tx.trade.create({
+      data: {
+        accountId: account.id,
+        instrumentId: instrument.id,
+        side: TradeSide.BUY,
+        quantityMicros: positiveDecimalInput(row.quantity, 'quantity'),
+        priceMicros: nonNegativeDecimalInput(row.price, 'price'),
+        feesMicros: 0n,
+        executedAt: parseZerodhaDate(row['transaction date'] || ''),
+        externalReference: `ZERODHA-HOLDINGS:${line}`,
+        notes: [
+          'Imported from Zerodha current holdings CSV',
+          `type: ${transactionType}`,
+          `isin: ${isin}`,
+        ].join(' | '),
+      },
+    });
   }
 }

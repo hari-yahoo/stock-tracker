@@ -127,8 +127,23 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
       .map((instrument) => ({
         id: instrument.id,
         symbol: instrument.symbol,
-        exchange: instrument.exchange,
+        exchange: 'NSE',
       }));
+
+    const mappings = await this.prisma.iciciSymbolMapping.findMany({
+      where: {
+        iciciSymbol: { in: instruments.map((instrument) => instrument.symbol) },
+      },
+      select: { iciciSymbol: true, nseSymbol: true },
+    });
+    const nseSymbols = new Map(
+      mappings.map((mapping) => [mapping.iciciSymbol, mapping.nseSymbol]),
+    );
+    const priceInstruments = instruments.map((instrument) => ({
+      ...instrument,
+      symbol: nseSymbols.get(instrument.symbol) ?? instrument.symbol,
+      exchange: 'NSE',
+    }));
 
     if (!instruments.length) {
       return {
@@ -143,8 +158,8 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
 
     const quotes =
       provider === 'NSE'
-        ? await this.nse.fetchQuotes(instruments)
-        : await this.zerodha.fetchQuotes(instruments);
+        ? await this.nse.fetchQuotes(priceInstruments)
+        : await this.zerodha.fetchQuotes(priceInstruments);
     const capturedAt = new Date();
 
     for (const quote of quotes.quotes) {

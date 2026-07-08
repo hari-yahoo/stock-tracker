@@ -1,11 +1,12 @@
 import { NsePriceProvider } from './nse-price-provider';
 
 describe('NsePriceProvider', () => {
-  it('returns NSE LTPs and reports unsupported or failed symbols', async () => {
+  it('always retrieves NSE LTPs regardless of stored exchange', async () => {
     const provider = new NsePriceProvider();
     const getEquityDetails = jest
       .fn()
       .mockResolvedValueOnce({ priceInfo: { lastPrice: 1711.45 } })
+      .mockRejectedValueOnce(new Error('Unknown symbol'))
       .mockRejectedValueOnce(new Error('Unknown symbol'));
 
     (
@@ -23,10 +24,11 @@ describe('NsePriceProvider', () => {
     expect(result).toEqual({
       provider: 'NSE',
       quotes: [{ instrumentId: 'infy-id', price: '1711.45' }],
-      missingSymbols: ['NSE:BAD', 'NASDAQ:AAPL'],
+      missingSymbols: ['NSE:BAD', 'NSE:AAPL'],
     });
-    expect(getEquityDetails).toHaveBeenCalledTimes(2);
+    expect(getEquityDetails).toHaveBeenCalledTimes(3);
     expect(getEquityDetails).toHaveBeenNthCalledWith(1, 'INFY');
     expect(getEquityDetails).toHaveBeenNthCalledWith(2, 'BAD');
+    expect(getEquityDetails).toHaveBeenNthCalledWith(3, 'AAPL');
   });
 });

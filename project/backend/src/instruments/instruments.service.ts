@@ -5,7 +5,11 @@ import {
   normalizeCurrency,
 } from '../common/api';
 import { PrismaService } from '../database/prisma.service';
-import { CreateInstrumentDto, UpdateInstrumentDto } from './instruments.dto';
+import {
+  CreateInstrumentDto,
+  SaveIciciSymbolMappingDto,
+  UpdateInstrumentDto,
+} from './instruments.dto';
 
 @Injectable()
 export class InstrumentsService {
@@ -52,6 +56,41 @@ export class InstrumentsService {
       });
     } catch (error) {
       mapPrismaError(error, 'Instrument');
+    }
+  }
+
+  listIciciSymbolMappings() {
+    return this.prisma.iciciSymbolMapping.findMany({
+      orderBy: { iciciSymbol: 'asc' },
+    });
+  }
+
+  async saveIciciSymbolMapping(dto: SaveIciciSymbolMappingDto) {
+    const iciciSymbol = normalizeCode(dto.iciciSymbol);
+    try {
+      return await this.prisma.iciciSymbolMapping.upsert({
+        where: { iciciSymbol },
+        create: {
+          iciciSymbol,
+          nseSymbol: normalizeCode(dto.nseSymbol),
+          companyName: dto.companyName?.trim() || null,
+        },
+        update: {
+          nseSymbol: normalizeCode(dto.nseSymbol),
+          companyName: dto.companyName?.trim() || null,
+        },
+      });
+    } catch (error) {
+      mapPrismaError(error, 'ICICIDirect symbol mapping');
+    }
+  }
+
+  async deleteIciciSymbolMapping(id: string) {
+    try {
+      await this.prisma.iciciSymbolMapping.delete({ where: { id } });
+      return { deleted: true };
+    } catch (error) {
+      mapPrismaError(error, 'ICICIDirect symbol mapping');
     }
   }
 }

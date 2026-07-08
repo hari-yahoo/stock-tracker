@@ -62,6 +62,16 @@ export async function importIciciDirectTrades(file: File, dryRun: boolean) {
   return (await response.json()) as ImportResult
 }
 
+export async function importZerodhaHoldings(file: File, dryRun: boolean) {
+  const response = await fetch(`/api/data/zerodha-holdings.csv?dryRun=${dryRun}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ csv: await file.text() }),
+  })
+  if (!response.ok) throw await apiError(response)
+  return (await response.json()) as ImportResult
+}
+
 export async function listBackups() {
   const response = await fetch('/api/backups')
   if (!response.ok) throw await apiError(response)

@@ -51,4 +51,15 @@ export class DataTransferController {
     //console.log('Importing ICICI Direct trades:', body.csv, dryRun);
     return this.transfer.importIciciDirectTrades(body.csv, dryRun === 'true');
   }
+
+  @Post('zerodha-holdings.csv')
+  importZerodhaHoldings(
+    @Body() body: { csv: string },
+    @Query('dryRun') dryRun = 'false',
+  ) {
+    if (dryRun !== 'true' && dryRun !== 'false') {
+      throw new BadRequestException('dryRun must be true or false');
+    }
+    return this.transfer.importZerodhaHoldings(body.csv, dryRun === 'true');
+  }
 }

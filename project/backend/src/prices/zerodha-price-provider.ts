@@ -31,7 +31,7 @@ export class ZerodhaPriceProvider {
       const batch = instruments.slice(index, index + 250);
       const search = new URLSearchParams();
       batch.forEach((instrument) =>
-        search.append('i', `${instrument.exchange}:${instrument.symbol}`),
+        search.append('i', `NSE:${instrument.symbol}`),
       );
 
       const response = await fetch(
@@ -57,7 +57,7 @@ export class ZerodhaPriceProvider {
       const data = payload.data ?? {};
 
       for (const instrument of batch) {
-        const key = `${instrument.exchange}:${instrument.symbol}`;
+        const key = `NSE:${instrument.symbol}`;
         const lastPrice = data[key]?.last_price;
         if (typeof lastPrice === 'number' && Number.isFinite(lastPrice)) {
           quotes.push({

@@ -4,6 +4,7 @@ import {
   getPriceRefreshStatus,
   importIciciDirectTrades,
   importTrades,
+  importZerodhaHoldings,
   listBackups,
   refreshPricesNow,
   restoreBackup,
@@ -19,6 +20,7 @@ function fileSize(bytes: number) {
 export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [iciciFile, setIciciFile] = useState<File | null>(null)
+  const [zerodhaFile, setZerodhaFile] = useState<File | null>(null)
   const [restoreFile, setRestoreFile] = useState<File | null>(null)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [backups, setBackups] = useState<BackupEntry[]>([])
@@ -83,6 +85,28 @@ export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
     } catch (error) {
       setImportResult(null)
       setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'ICICIDirect import failed.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function runZerodhaImport(dryRun: boolean) {
+    if (!zerodhaFile) return
+    setBusy(dryRun ? 'zerodha-validate' : 'zerodha-import')
+    setMessage(null)
+    try {
+      const result = await importZerodhaHoldings(zerodhaFile, dryRun)
+      setImportResult(result)
+      setMessage({
+        tone: 'success',
+        text: dryRun
+          ? `Zerodha validation passed for ${result.importedTrades} holding lots. No data was changed.`
+          : `Imported ${result.importedTrades} Zerodha holding lots successfully.`,
+      })
+      if (!dryRun) onDataChanged()
+    } catch (error) {
+      setImportResult(null)
+      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Zerodha import failed.' })
     } finally {
       setBusy(null)
     }
@@ -180,6 +204,21 @@ export function DataTools({ onDataChanged }: { onDataChanged: () => void }) {
           <div className="tool-actions">
             <button className="secondary-button" disabled={!iciciFile || busy !== null} onClick={() => void runIciciImport(true)}>{busy === 'icici-validate' ? 'Validating…' : 'Validate only'}</button>
             <button className="primary-button" disabled={!iciciFile || busy !== null} onClick={() => void runIciciImport(false)}>{busy === 'icici-import' ? 'Importing…' : 'Import ICICIDirect CSV'}</button>
+          </div>
+        </section>
+
+        <section className="panel tool-card">
+          <div className="tool-card__heading"><span>Broker import</span><h2>Import Zerodha holdings</h2><p>Loads the remaining acquisition lots in Zerodha’s current-holdings CSV. Identical rows and adjusted split costs are preserved.</p></div>
+          <label className="file-drop">
+            <input type="file" accept=".csv,text/csv" onChange={(event) => { setZerodhaFile(event.target.files?.[0] ?? null); setImportResult(null) }} />
+            <span className="file-drop__icon">⇪</span>
+            <strong>{zerodhaFile ? zerodhaFile.name : 'Choose Zerodha holdings CSV'}</strong>
+            <small>{zerodhaFile ? fileSize(zerodhaFile.size) : 'Current holdings lot breakup · up to 10 MB'}</small>
+          </label>
+          <small className="safety-note">This is an opening holdings snapshot, not complete transaction history. BUY, BONUS, and SPLIT rows are imported as open lots.</small>
+          <div className="tool-actions">
+            <button className="secondary-button" disabled={!zerodhaFile || busy !== null} onClick={() => void runZerodhaImport(true)}>{busy === 'zerodha-validate' ? 'Validating…' : 'Validate only'}</button>
+            <button className="primary-button" disabled={!zerodhaFile || busy !== null} onClick={() => void runZerodhaImport(false)}>{busy === 'zerodha-import' ? 'Importing…' : 'Import Zerodha CSV'}</button>
           </div>
         </section>
 

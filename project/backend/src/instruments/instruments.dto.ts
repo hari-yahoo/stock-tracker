@@ -3,7 +3,10 @@ import {
   IsOptional,
   IsString,
   Length,
+  Matches,
 } from 'class-validator';
+
+const STOCK_SYMBOL = /^[A-Z0-9][A-Z0-9&.-]*$/i;
 
 export class CreateInstrumentDto {
   @IsString()
@@ -38,4 +41,21 @@ export class UpdateInstrumentDto {
   @IsString()
   @Length(1, 100)
   sector?: string;
+}
+
+export class SaveIciciSymbolMappingDto {
+  @IsString()
+  @Length(1, 32)
+  @Matches(STOCK_SYMBOL)
+  iciciSymbol!: string;
+
+  @IsString()
+  @Length(1, 32)
+  @Matches(STOCK_SYMBOL)
+  nseSymbol!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  companyName?: string;
 }

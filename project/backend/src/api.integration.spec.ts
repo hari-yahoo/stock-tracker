@@ -36,6 +36,19 @@ describe('ledger API services', () => {
     );
     const database = new DatabaseSync(databasePath);
     database.exec(migration);
+    database.exec(
+      readFileSync(
+        join(
+          __dirname,
+          '..',
+          'prisma',
+          'migrations',
+          '20260708120000_add_icici_symbol_mappings',
+          'migration.sql',
+        ),
+        'utf8',
+      ),
+    );
     database.close();
     process.env.DATABASE_URL = `file:${databasePath}`;
     prisma = new PrismaService();
@@ -249,14 +262,20 @@ describe('ledger API services', () => {
       'ICICI,ICICI BANK LIMITED,INE090A01021,Sell,8,130,1,0.5,0,TT,STT Paid,icicidirect,03-Jul-2024,NSE,',
       '',
     ].join('\r\n');
-    expect(await transfer.importIciciDirectTrades(iciciCsv, true)).toMatchObject({
+    expect(
+      await transfer.importIciciDirectTrades(iciciCsv, true),
+    ).toMatchObject({
       dryRun: true,
       importedTrades: 3,
       createdAccounts: 1,
       createdInstruments: 1,
-      warnings: ['Row 3: corporate action imported as a zero- or stated-cost BUY row'],
+      warnings: [
+        'Row 3: corporate action imported as a zero- or stated-cost BUY row',
+      ],
     });
-    expect(await transfer.importIciciDirectTrades(iciciCsv, false)).toMatchObject({
+    expect(
+      await transfer.importIciciDirectTrades(iciciCsv, false),
+    ).toMatchObject({
       dryRun: false,
       importedTrades: 3,
     });
@@ -269,6 +288,56 @@ describe('ledger API services', () => {
     expect(importedIciciTrades[2].closingAllocations).toHaveLength(1);
     expect(decimalOutput(importedIciciTrades[2].feesMicros)).toBe('1.5');
 
+    const mapping = await instruments.saveIciciSymbolMapping({
+      iciciSymbol: 'ICICI',
+      nseSymbol: 'ICICIBANK',
+      companyName: 'ICICI Bank Limited',
+    });
+    expect(await instruments.listIciciSymbolMappings()).toContainEqual(mapping);
+
+    const zerodhaCsv = [
+      'Symbol,ISIN,Transaction Date,Transaction Type,Quantity,Price',
+      'PSUBNKBEES,INF204KB16I7,2024-07-08,BUY,9,81.4',
+      'PSUBNKBEES,INF204KB16I7,2024-07-08,BUY,9,81.4',
+      'KOTAKBANK,INE237A01036,2025-07-17,BUY,4,437.12',
+      'KOTAKBANK,INE237A01036,2025-07-17,SPLIT,16,437.12',
+      'LICI,INE0J1Y01017,2026-05-28,BONUS,15,0',
+      '',
+    ].join('\r\n');
+    expect(
+      await transfer.importZerodhaHoldings(zerodhaCsv, true),
+    ).toMatchObject({
+      dryRun: true,
+      importedTrades: 5,
+      createdInstruments: 3,
+    });
+    expect(
+      await transfer.importZerodhaHoldings(zerodhaCsv, false),
+    ).toMatchObject({
+      dryRun: false,
+      importedTrades: 5,
+    });
+    const importedZerodhaTrades = await prisma.trade.findMany({
+      where: { externalReference: { startsWith: 'ZERODHA-HOLDINGS:' } },
+      orderBy: { externalReference: 'asc' },
+    });
+    expect(importedZerodhaTrades).toHaveLength(5);
+    expect(
+      importedZerodhaTrades.filter((trade) =>
+        trade.notes?.includes('isin: INF204KB16I7'),
+      ),
+    ).toHaveLength(2);
+    expect(
+      importedZerodhaTrades.find((trade) =>
+        trade.notes?.includes('type: SPLIT'),
+      ),
+    ).toMatchObject({ side: TradeSide.BUY });
+    const importedBonus = importedZerodhaTrades.find((trade) =>
+      trade.notes?.includes('type: BONUS'),
+    );
+    expect(importedBonus).toBeDefined();
+    expect(decimalOutput(importedBonus?.priceMicros ?? -1n)).toBe('0');
+
     const originalFetch = global.fetch;
     process.env.STOCK_TRACKER_PRICE_PROVIDER = 'ZERODHA';
     process.env.ZERODHA_API_KEY = 'kite-key';
@@ -279,7 +348,8 @@ describe('ledger API services', () => {
         data: {
           'NSE:INFY': { last_price: 1711.45 },
           'NASDAQ:AAPL': { last_price: 112.25 },
-          'NSE:ICICI': { last_price: 140.1 },
+          'NSE:ICICIBANK': { last_price: 140.1 },
+          'NSE:AAPL': { last_price: 112.25 },
         },
       }),
     } as Response);
@@ -300,7 +370,9 @@ describe('ledger API services', () => {
       asOf: '2026-12-03T10:00:00.000Z',
       additionalInstructions: 'Focus on exit-plan discipline.',
     });
-    expect(generatedPrompt.prompt).toContain('Portfolio strategy review request');
+    expect(generatedPrompt.prompt).toContain(
+      'Portfolio strategy review request',
+    );
     expect(generatedPrompt.prompt).toContain('AAPL');
     expect(generatedPrompt.prompt).toContain('Focus on exit-plan discipline.');
     expect(generatedPrompt.context.holdingCount).toBeGreaterThan(0);

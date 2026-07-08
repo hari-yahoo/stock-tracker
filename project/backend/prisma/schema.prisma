@@ -51,6 +51,18 @@ model Instrument {
   @@map("instruments")
 }
 
+model IciciSymbolMapping {
+  id          String   @id @default(uuid())
+  iciciSymbol String   @unique @map("icici_symbol")
+  nseSymbol   String   @map("nse_symbol")
+  companyName String?  @map("company_name")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([nseSymbol])
+  @@map("icici_symbol_mappings")
+}
+
 /// Economic fields on a posted trade are immutable. Corrections void the
 /// original trade and append a replacement in one database transaction.
 model Trade {

@@ -3,6 +3,7 @@ import type { ReactNode, SVGProps } from 'react'
 import { AiInsights } from './AiInsights'
 import { DataTools } from './DataTools'
 import { HoldingsScreen } from './HoldingsScreen'
+import { SymbolMappingsScreen } from './SymbolMappingsScreen'
 import { TransactionsScreen } from './TransactionsScreen'
 import { getPortfolio } from './portfolio'
 import type { Holding, PortfolioAlert, PortfolioSnapshot } from './portfolio'
@@ -86,6 +87,7 @@ const navItems = [
   { label: 'Transactions', icon: icons.history, view: 'transactions' as const },
   { label: 'AI Insights', icon: icons.spark, view: 'ai' as const },
   { label: 'Data & backups', icon: icons.settings, view: 'data' as const },
+  { label: 'Symbol mappings', icon: icons.refresh, view: 'mappings' as const },
 ]
 
 function MetricCard({
@@ -287,7 +289,7 @@ function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; o
 }
 
 function App() {
-  const [view, setView] = useState<'dashboard' | 'holdings' | 'transactions' | 'ai' | 'data'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'holdings' | 'transactions' | 'ai' | 'data' | 'mappings'>('dashboard')
   const [data, setData] = useState<PortfolioSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(true)
@@ -358,6 +360,8 @@ function App() {
           <TransactionsScreen />
         ) : view === 'data' ? (
           <DataTools onDataChanged={() => void load()} />
+        ) : view === 'mappings' ? (
+          <SymbolMappingsScreen />
         ) : error && !data ? (
           <main className="main-content centered-state">
             <div className="error-card">
