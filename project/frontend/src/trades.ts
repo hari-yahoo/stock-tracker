@@ -14,6 +14,7 @@ interface TradeInstrument {
   name: string | null
   sector: string | null
   quoteCurrency: string
+  instrumentType: 'EQUITY' | 'ETF'
 }
 
 interface TradeAllocation {

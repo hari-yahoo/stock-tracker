@@ -38,6 +38,7 @@ export class InstrumentsService {
           quoteCurrency: normalizeCurrency(dto.quoteCurrency),
           name: dto.name?.trim() || null,
           sector: dto.sector?.trim() || null,
+          instrumentType: dto.instrumentType,
         },
       });
     } catch (error) {
@@ -52,6 +53,9 @@ export class InstrumentsService {
         data: {
           ...(dto.name === undefined ? {} : { name: dto.name.trim() }),
           ...(dto.sector === undefined ? {} : { sector: dto.sector.trim() }),
+          ...(dto.instrumentType === undefined
+            ? {}
+            : { instrumentType: dto.instrumentType }),
         },
       });
     } catch (error) {

@@ -16,6 +16,11 @@ enum TradeStatus {
   VOIDED
 }
 
+enum InstrumentType {
+  EQUITY
+  ETF
+}
+
 enum ExitPlanStatus {
   ACTIVE
   COMPLETED
@@ -41,6 +46,7 @@ model Instrument {
   name          String?
   sector        String?
   quoteCurrency String          @map("quote_currency")
+  instrumentType InstrumentType @default(EQUITY) @map("instrument_type")
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
   trades        Trade[]

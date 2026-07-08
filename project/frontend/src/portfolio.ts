@@ -17,6 +17,7 @@ export interface Instrument {
   name: string | null
   sector: string | null
   quoteCurrency: string
+  instrumentType: 'EQUITY' | 'ETF'
 }
 
 export interface Holding {

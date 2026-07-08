@@ -5,6 +5,8 @@ import {
   Length,
   Matches,
 } from 'class-validator';
+import { InstrumentType } from '@prisma/client';
+import { IsEnum } from 'class-validator';
 
 const STOCK_SYMBOL = /^[A-Z0-9][A-Z0-9&.-]*$/i;
 
@@ -29,6 +31,10 @@ export class CreateInstrumentDto {
   @IsString()
   @Length(1, 100)
   sector?: string;
+
+  @IsOptional()
+  @IsEnum(InstrumentType)
+  instrumentType?: InstrumentType;
 }
 
 export class UpdateInstrumentDto {
@@ -41,6 +47,10 @@ export class UpdateInstrumentDto {
   @IsString()
   @Length(1, 100)
   sector?: string;
+
+  @IsOptional()
+  @IsEnum(InstrumentType)
+  instrumentType?: InstrumentType;
 }
 
 export class SaveIciciSymbolMappingDto {

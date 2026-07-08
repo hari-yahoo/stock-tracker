@@ -49,6 +49,19 @@ describe('ledger API services', () => {
         'utf8',
       ),
     );
+    database.exec(
+      readFileSync(
+        join(
+          __dirname,
+          '..',
+          'prisma',
+          'migrations',
+          '20260708130000_add_instrument_type',
+          'migration.sql',
+        ),
+        'utf8',
+      ),
+    );
     database.close();
     process.env.DATABASE_URL = `file:${databasePath}`;
     prisma = new PrismaService();
@@ -322,6 +335,13 @@ describe('ledger API services', () => {
       orderBy: { externalReference: 'asc' },
     });
     expect(importedZerodhaTrades).toHaveLength(5);
+    expect(
+      await prisma.instrument.findUnique({
+        where: {
+          symbol_exchange: { symbol: 'PSUBNKBEES', exchange: 'NSE' },
+        },
+      }),
+    ).toMatchObject({ instrumentType: 'ETF' });
     expect(
       importedZerodhaTrades.filter((trade) =>
         trade.notes?.includes('isin: INF204KB16I7'),

@@ -128,6 +128,7 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
         id: instrument.id,
         symbol: instrument.symbol,
         exchange: 'NSE',
+        instrumentType: instrument.instrumentType,
       }));
 
     const mappings = await this.prisma.iciciSymbolMapping.findMany({

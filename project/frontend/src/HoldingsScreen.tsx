@@ -272,7 +272,7 @@ export function HoldingsScreen({
                             <span className="asset-mark">{holding.instrument.symbol.slice(0, 2)}</span>
                             <span>
                               <strong>{holding.instrument.symbol}</strong>
-                              <small>{holding.instrument.name ?? holding.instrument.exchange}</small>
+                              <small>{holding.instrument.name ?? holding.instrument.exchange} · {holding.instrument.instrumentType}</small>
                             </span>
                           </div>
                         </td>
@@ -320,8 +320,12 @@ export function HoldingsScreen({
                   <p>{selectedHolding.instrument.name ?? 'Unnamed instrument'} · {selectedHolding.account.name}</p>
                 </div>
 
-                <dl className="holding-stat-list">
-                  <div>
+                  <dl className="holding-stat-list">
+                    <div>
+                      <dt>Instrument type</dt>
+                      <dd>{selectedHolding.instrument.instrumentType}</dd>
+                    </div>
+                    <div>
                     <dt>Exchange</dt>
                     <dd>{selectedHolding.instrument.exchange}</dd>
                   </div>

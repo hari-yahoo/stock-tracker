@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma, TradeSide, TradeStatus } from '@prisma/client';
+import { InstrumentType, Prisma, TradeSide, TradeStatus } from '@prisma/client';
 import {
   nonNegativeDecimalInput,
   normalizeCode,
@@ -134,6 +134,12 @@ function parseZerodhaDate(value: string): Date {
     throw new BadRequestException('transaction date is invalid');
   }
   return date;
+}
+
+function instrumentTypeFromIsin(isin: string): InstrumentType {
+  return normalizeCode(isin).startsWith('INF')
+    ? InstrumentType.ETF
+    : InstrumentType.EQUITY;
 }
 
 @Injectable()
@@ -492,6 +498,8 @@ export class DataTransferService {
     const symbol = normalizeCode(row['stock symbol'] || '');
     const exchange = normalizeCode(row.exchange || '');
     const action = normalizeCode(row.action || '');
+    const isin = normalizeCode(row['isin code'] || '');
+    const instrumentType = instrumentTypeFromIsin(isin);
     const accountName = 'ICICIDirect';
     if (!symbol || !exchange) {
       throw new Error('stock symbol and exchange are required');
@@ -512,9 +520,11 @@ export class DataTransferService {
         exchange,
         name: row['company name']?.trim() || null,
         quoteCurrency: 'INR',
+        instrumentType,
       },
       update: {
         name: row['company name']?.trim() || undefined,
+        instrumentType,
       },
     });
 
@@ -619,6 +629,7 @@ export class DataTransferService {
     const symbol = normalizeCode(row.symbol || '');
     const isin = normalizeCode(row.isin || '');
     const transactionType = normalizeCode(row['transaction type'] || '');
+    const instrumentType = instrumentTypeFromIsin(isin);
     if (!symbol || !isin) throw new Error('symbol and ISIN are required');
     if (!/^[A-Z0-9]{12}$/.test(isin)) {
       throw new Error('ISIN must contain 12 letters or digits');
@@ -638,8 +649,9 @@ export class DataTransferService {
         symbol,
         exchange: 'NSE',
         quoteCurrency: 'INR',
+        instrumentType,
       },
-      update: {},
+      update: { instrumentType },
     });
 
     await tx.trade.create({
