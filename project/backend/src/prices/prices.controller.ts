@@ -51,6 +51,11 @@ export class PricesController {
     return this.prices.refreshEndOfDayPrices('MANUAL');
   }
 
+  @Post('refresh/ltp')
+  refreshLatestTradedPrices() {
+    return this.prices.refreshEndOfDayPrices('MANUAL');
+  }
+
   @Post()
   create(@Body() dto: CreatePriceDto) {
     return this.prices.create(dto);

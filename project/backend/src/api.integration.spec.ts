@@ -16,6 +16,7 @@ import { PricesService } from './prices/prices.service';
 import { PortfolioService } from './portfolio/portfolio.service';
 import { TradesService } from './trades/trades.service';
 import { ZerodhaPriceProvider } from './prices/zerodha-price-provider';
+import { NsePriceProvider } from './prices/nse-price-provider';
 
 describe('ledger API services', () => {
   const databasePath = join(tmpdir(), `stock-tracker-${randomUUID()}.db`);
@@ -61,6 +62,7 @@ describe('ledger API services', () => {
     const prices = new PricesService(
       prisma,
       portfolio,
+      new NsePriceProvider(),
       new ZerodhaPriceProvider(),
     );
 

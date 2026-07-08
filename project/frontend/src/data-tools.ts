@@ -5,7 +5,6 @@ export interface ImportResult {
   createdInstruments: number
   warnings?: string[]
 }
-
 export interface BackupEntry {
   name: string
   size: number
@@ -76,7 +75,7 @@ export async function getPriceRefreshStatus() {
 }
 
 export async function refreshPricesNow() {
-  const response = await fetch('/api/prices/refresh/eod', {
+  const response = await fetch('/api/prices/refresh/ltp', {
     method: 'POST',
   })
   if (!response.ok) throw await apiError(response)

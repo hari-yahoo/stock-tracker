@@ -1,21 +1,5 @@
 import { BadGatewayException, Injectable } from '@nestjs/common';
-
-interface InstrumentRef {
-  id: string;
-  symbol: string;
-  exchange: string;
-}
-
-interface ProviderQuote {
-  instrumentId: string;
-  price: string;
-}
-
-interface ProviderResult {
-  provider: string;
-  quotes: ProviderQuote[];
-  missingSymbols: string[];
-}
+import { PriceInstrumentRef, PriceProviderResult } from './nse-price-provider';
 
 function decimalString(value: number) {
   return value.toFixed(6).replace(/\.?0+$/, '');
@@ -26,17 +10,21 @@ export class ZerodhaPriceProvider {
   readonly name = 'ZERODHA';
 
   isConfigured() {
-    return Boolean(process.env.ZERODHA_API_KEY && process.env.ZERODHA_ACCESS_TOKEN);
+    return Boolean(
+      process.env.ZERODHA_API_KEY && process.env.ZERODHA_ACCESS_TOKEN,
+    );
   }
 
-  async fetchQuotes(instruments: InstrumentRef[]): Promise<ProviderResult> {
+  async fetchQuotes(
+    instruments: PriceInstrumentRef[],
+  ): Promise<PriceProviderResult> {
     if (!this.isConfigured()) {
       throw new BadGatewayException(
         'Zerodha price provider is not configured. Set ZERODHA_API_KEY and ZERODHA_ACCESS_TOKEN.',
       );
     }
 
-    const quotes: ProviderQuote[] = [];
+    const quotes: PriceProviderResult['quotes'] = [];
     const missingSymbols: string[] = [];
 
     for (let index = 0; index < instruments.length; index += 250) {

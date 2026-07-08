@@ -15,6 +15,7 @@ import {
 import { formatScaledDecimal, parseScaledDecimal } from '../common/money';
 import { PrismaService } from '../database/prisma.service';
 import { PortfolioService } from '../portfolio/portfolio.service';
+import { NsePriceProvider } from './nse-price-provider';
 import { CreateFxRateDto, CreatePriceDto, FxRateQueryDto } from './prices.dto';
 import { ZerodhaPriceProvider } from './zerodha-price-provider';
 
@@ -34,6 +35,7 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly portfolio: PortfolioService,
+    private readonly nse: NsePriceProvider,
     private readonly zerodha: ZerodhaPriceProvider,
   ) {}
 
@@ -87,25 +89,32 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
   }
 
   getRefreshStatus() {
-    const provider = (process.env.STOCK_TRACKER_PRICE_PROVIDER ?? 'DISABLED').toUpperCase();
+    const provider = this.providerName();
     return {
       enabled: this.isEodRefreshEnabled(),
       provider,
-      configured: provider === 'ZERODHA' ? this.zerodha.isConfigured() : false,
+      configured:
+        provider === 'NSE'
+          ? this.nse.isConfigured()
+          : provider === 'ZERODHA'
+            ? this.zerodha.isConfigured()
+            : false,
       nextRunAt: this.nextScheduledRefreshAt?.toISOString() ?? null,
       schedule: '18:00 IST daily',
     };
   }
 
   async refreshEndOfDayPrices(trigger: 'MANUAL' | 'SCHEDULED' = 'MANUAL') {
-    const provider = (process.env.STOCK_TRACKER_PRICE_PROVIDER ?? 'DISABLED').toUpperCase();
-    if (provider !== 'ZERODHA') {
+    const provider = this.providerName();
+    if (provider !== 'NSE' && provider !== 'ZERODHA') {
       throw new BadRequestException(
-        'No supported EOD price provider is configured. Set STOCK_TRACKER_PRICE_PROVIDER=ZERODHA.',
+        'Unsupported price provider. Use STOCK_TRACKER_PRICE_PROVIDER=NSE or ZERODHA.',
       );
     }
 
-    const snapshot = await this.portfolio.snapshot({ reportingCurrency: 'INR' });
+    const snapshot = await this.portfolio.snapshot({
+      reportingCurrency: 'INR',
+    });
     const seen = new Set<string>();
     const instruments = snapshot.holdings
       .map((holding) => holding.instrument)
@@ -132,7 +141,10 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    const quotes = await this.zerodha.fetchQuotes(instruments);
+    const quotes =
+      provider === 'NSE'
+        ? await this.nse.fetchQuotes(instruments)
+        : await this.zerodha.fetchQuotes(instruments);
     const capturedAt = new Date();
 
     for (const quote of quotes.quotes) {
@@ -215,6 +227,10 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
     return process.env.EOD_PRICE_REFRESH_ENABLED === 'true';
   }
 
+  private providerName() {
+    return (process.env.STOCK_TRACKER_PRICE_PROVIDER ?? 'NSE').toUpperCase();
+  }
+
   private scheduleNextRefresh() {
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     const now = new Date();
@@ -227,12 +243,19 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
     }
     const nextRunAt = new Date(nextIst.getTime() - istOffsetMs);
     this.nextScheduledRefreshAt = nextRunAt;
-    this.refreshTimer = setTimeout(async () => {
-      try {
-        await this.refreshEndOfDayPrices('SCHEDULED');
-      } finally {
-        this.scheduleNextRefresh();
-      }
-    }, Math.max(1000, nextRunAt.getTime() - now.getTime()));
+    this.refreshTimer = setTimeout(
+      () => {
+        void this.runScheduledRefresh();
+      },
+      Math.max(1000, nextRunAt.getTime() - now.getTime()),
+    );
+  }
+
+  private async runScheduledRefresh() {
+    try {
+      await this.refreshEndOfDayPrices('SCHEDULED');
+    } finally {
+      this.scheduleNextRefresh();
+    }
   }
 }
