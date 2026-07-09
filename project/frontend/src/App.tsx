@@ -5,9 +5,9 @@ import { DataTools } from './DataTools'
 import { HoldingsScreen } from './HoldingsScreen'
 import { SymbolMappingsScreen } from './SymbolMappingsScreen'
 import { TransactionsScreen } from './TransactionsScreen'
-import { getPortfolio } from './portfolio'
-import type { Holding, PortfolioAlert, PortfolioSnapshot } from './portfolio'
-import { formatDate, formatMoney, formatQuantity, pnlTone, scaledToFixed } from './portfolio-format'
+import { getPortfolio, getPortfolioHistory } from './portfolio'
+import type { PortfolioAlert, PortfolioHistoryPoint, PortfolioSnapshot } from './portfolio'
+import { formatDate, formatMoney, pnlTone } from './portfolio-format'
 import './App.css'
 
 type IconProps = SVGProps<SVGSVGElement>
@@ -119,75 +119,6 @@ function MetricCard({
   )
 }
 
-function EmptyHoldings() {
-  return (
-    <div className="empty-state">
-      <div className="empty-state__icon">{icons.holdings}</div>
-      <strong>Your portfolio is ready for its first position</strong>
-      <p>Add an account and a BUY trade through the API to see valuation, cost basis, and exit discipline here.</p>
-    </div>
-  )
-}
-
-function HoldingsTable({ holdings }: { holdings: Holding[] }) {
-  if (!holdings.length) return <EmptyHoldings />
-  return (
-    <div className="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Asset</th>
-            <th>Quantity</th>
-            <th>Avg. cost</th>
-            <th>Market value</th>
-            <th>Unrealized P/L</th>
-            <th aria-label="Open details" />
-          </tr>
-        </thead>
-        <tbody>
-          {holdings.map((holding) => {
-            const tone = pnlTone(holding.unrealizedPnl)
-            return (
-              <tr key={`${holding.account.id}:${holding.instrument.id}`}>
-                <td>
-                  <div className="asset-cell">
-                    <span className="asset-mark">{holding.instrument.symbol.slice(0, 2)}</span>
-                    <span>
-                      <strong>{holding.instrument.symbol}</strong>
-                      <small>{holding.account.name} · {holding.instrument.exchange}</small>
-                    </span>
-                  </div>
-                </td>
-                <td>{formatQuantity(holding.quantity)}</td>
-                <td>{formatMoney(holding.averageCost, holding.instrument.quoteCurrency)}</td>
-                <td>
-                  <strong>{formatMoney(holding.currentValue, holding.instrument.quoteCurrency)}</strong>
-                  <small className="cell-subtle">
-                    {holding.currentPrice
-                      ? `${formatMoney(holding.currentPrice, holding.instrument.quoteCurrency)} / share`
-                      : 'Price needed'}
-                  </small>
-                </td>
-                <td>
-                  <span className={`pnl pnl--${tone}`}>
-                    {formatMoney(holding.unrealizedPnl, holding.instrument.quoteCurrency)}
-                  </span>
-                  <small className={`cell-subtle cell-subtle--${tone}`}>
-                    {holding.unrealizedPnlPercent
-                      ? `${scaledToFixed(holding.unrealizedPnlPercent)}%`
-                      : '—'}
-                  </small>
-                </td>
-                <td><button className="icon-button" aria-label={`View ${holding.instrument.symbol}`}>{icons.chevron}</button></td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
 const alertLabels: Record<PortfolioAlert['type'], string> = {
   TARGET_HIT: 'Target price reached',
   OVERDUE: 'Exit plan overdue',
@@ -233,7 +164,148 @@ function AlertsPanel({ alerts }: { alerts: PortfolioAlert[] }) {
   )
 }
 
-function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; onRefresh: () => void; refreshing: boolean }) {
+function toChartNumber(value: string | null) {
+  if (value === null) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function InvestmentValueChart({
+  history,
+  currency,
+}: {
+  history: PortfolioHistoryPoint[]
+  currency: string
+}) {
+  const chart = useMemo(() => {
+    const points = history
+      .map((point) => ({
+        ...point,
+        invested: toChartNumber(point.investedAmount),
+        market: toChartNumber(point.marketValue),
+      }))
+      .filter((point) => point.invested !== null || point.market !== null)
+      .sort((left, right) => new Date(left.asOf).getTime() - new Date(right.asOf).getTime())
+    const values = points.flatMap((point) => [point.invested, point.market]).filter((value): value is number => value !== null)
+    const maxValue = Math.max(...values, 1)
+    const width = 760
+    const height = 300
+    const padding = { top: 28, right: 28, bottom: 38, left: 58 }
+    const plotWidth = width - padding.left - padding.right
+    const plotHeight = height - padding.top - padding.bottom
+    const x = (index: number) => padding.left + (points.length <= 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth)
+    const y = (value: number) => padding.top + plotHeight - (value / maxValue) * plotHeight
+    const pathFor = (key: 'invested' | 'market') => {
+      let path = ''
+      let started = false
+      for (const [index, point] of points.entries()) {
+        const value = point[key]
+        if (value === null) {
+          started = false
+          continue
+        }
+        path += `${started ? 'L' : 'M'} ${x(index).toFixed(2)} ${y(value).toFixed(2)} `
+        started = true
+      }
+      return path
+    }
+    const grid = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+      const value = maxValue * ratio
+      return { value, y: y(value) }
+    })
+    return {
+      points,
+      width,
+      height,
+      padding,
+      plotWidth,
+      investedPath: pathFor('invested'),
+      marketPath: pathFor('market'),
+      grid,
+      x,
+      y,
+    }
+  }, [history])
+
+  const latest = chart.points.at(-1)
+
+  return (
+    <section className="panel value-chart-panel" aria-label="Invested amount and market value history">
+      <div className="panel-heading value-chart-heading">
+        <div>
+          <span className="section-kicker">Portfolio trajectory</span>
+          <h2>Invested amount vs market value</h2>
+        </div>
+        <div className="chart-legend" aria-hidden="true">
+          <span><i className="legend-dot legend-dot--invested" /> Invested</span>
+          <span><i className="legend-dot legend-dot--market" /> Market value</span>
+        </div>
+      </div>
+      {chart.points.length ? (
+        <div className="value-chart-body">
+          <div className="value-chart-summary">
+            <div>
+              <span>Latest invested</span>
+              <strong>{formatMoney(latest?.investedAmount ?? null, currency)}</strong>
+            </div>
+            <div>
+              <span>Latest market value</span>
+              <strong>{formatMoney(latest?.marketValue ?? null, currency)}</strong>
+            </div>
+          </div>
+          <div className="value-chart-wrap">
+            <svg viewBox={`0 0 ${chart.width} ${chart.height}`} role="img" aria-label="Line chart comparing invested amount and market value over time">
+              {chart.grid.map((line) => (
+                <g key={line.value}>
+                  <line className="chart-grid-line" x1={chart.padding.left} x2={chart.padding.left + chart.plotWidth} y1={line.y} y2={line.y} />
+                  <text className="chart-axis-label" x={chart.padding.left - 10} y={line.y + 4} textAnchor="end">
+                    {formatMoney(line.value.toFixed(2), currency)}
+                  </text>
+                </g>
+              ))}
+              <path className="chart-line chart-line--invested" d={chart.investedPath} />
+              <path className="chart-line chart-line--market" d={chart.marketPath} />
+              {chart.points.map((point, index) => (
+                <g key={point.asOf}>
+                  {point.invested !== null && <circle className="chart-point chart-point--invested" cx={chart.x(index)} cy={chart.y(point.invested)} r="3.8" />}
+                  {point.market !== null && <circle className="chart-point chart-point--market" cx={chart.x(index)} cy={chart.y(point.market)} r="3.8" />}
+                </g>
+              ))}
+              {chart.points.length > 1 && (
+                <>
+                  <text className="chart-axis-label" x={chart.padding.left} y={chart.height - 10} textAnchor="middle">
+                    {formatDate(chart.points[0].asOf)}
+                  </text>
+                  <text className="chart-axis-label" x={chart.padding.left + chart.plotWidth} y={chart.height - 10} textAnchor="middle">
+                    {formatDate(chart.points[chart.points.length - 1].asOf)}
+                  </text>
+                </>
+              )}
+            </svg>
+          </div>
+        </div>
+      ) : (
+        <div className="quiet-state">
+          <span className="quiet-state__check">↗</span>
+          <strong>No chart data yet</strong>
+          <p>Add a BUY trade and price snapshot to start plotting invested amount against market value.</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Dashboard({
+  data,
+  history,
+  onRefresh,
+  refreshing,
+}: {
+  data: PortfolioSnapshot
+  history: PortfolioHistoryPoint[]
+  onRefresh: () => void
+  refreshing: boolean
+}) {
   const totals = data.summary.reportingTotals
   const pnlToneValue = pnlTone(totals.unrealizedPnl)
   const hour = new Date().getHours()
@@ -272,16 +344,7 @@ function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; o
       </section>
 
       <div className="dashboard-grid">
-        <section className="panel holdings-panel" id="holdings">
-          <div className="panel-heading">
-            <div>
-              <span className="section-kicker">Current positions</span>
-              <h2>Holdings</h2>
-            </div>
-            <span className="panel-meta">{data.summary.holdingCount} assets</span>
-          </div>
-          <HoldingsTable holdings={data.holdings} />
-        </section>
+        <InvestmentValueChart history={history} currency={data.reportingCurrency} />
         <AlertsPanel alerts={data.alerts} />
       </div>
     </main>
@@ -291,14 +354,19 @@ function Dashboard({ data, onRefresh, refreshing }: { data: PortfolioSnapshot; o
 function App() {
   const [view, setView] = useState<'dashboard' | 'holdings' | 'transactions' | 'ai' | 'data' | 'mappings'>('dashboard')
   const [data, setData] = useState<PortfolioSnapshot | null>(null)
+  const [history, setHistory] = useState<PortfolioHistoryPoint[]>([])
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(true)
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setRefreshing(true)
     try {
-      const snapshot = await getPortfolio(signal)
+      const [snapshot, historyPoints] = await Promise.all([
+        getPortfolio(signal),
+        getPortfolioHistory(signal),
+      ])
       setData(snapshot)
+      setHistory(historyPoints)
       setError(null)
     } catch (requestError) {
       if (requestError instanceof DOMException && requestError.name === 'AbortError') return
@@ -310,9 +378,13 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    void getPortfolio(controller.signal)
-      .then((snapshot) => {
+    void Promise.all([
+      getPortfolio(controller.signal),
+      getPortfolioHistory(controller.signal),
+    ])
+      .then(([snapshot, historyPoints]) => {
         setData(snapshot)
+        setHistory(historyPoints)
         setError(null)
       })
       .catch((requestError: unknown) => {
@@ -375,7 +447,7 @@ function App() {
           view === 'holdings' ? (
             <HoldingsScreen data={data} onRefresh={() => void load()} refreshing={refreshing} />
           ) : (
-            <Dashboard data={data} onRefresh={() => void load()} refreshing={refreshing} />
+            <Dashboard data={data} history={history} onRefresh={() => void load()} refreshing={refreshing} />
           )
         ) : (
           <main className="main-content loading-state" aria-label="Loading portfolio">

@@ -46,9 +46,13 @@ export class NsePriceProvider {
     );
     const missedInstruments: PriceInstrumentRef[] = [];
 
+    let index = 0;
     for (const instrument of equityInstruments) {
       const symbol = instrument.symbol.trim().toUpperCase();
-      console.log(`Fetching quote for NSE:${symbol}`);
+      index++;
+      console.log(
+        `${index}. ${equityInstruments.length} Fetching quote for NSE:${symbol}`,
+      );
 
       try {
         const details = await this.client.getEquityDetails(symbol);

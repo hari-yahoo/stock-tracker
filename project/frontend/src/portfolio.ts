@@ -86,6 +86,12 @@ export interface PortfolioSnapshot {
   warnings: PortfolioWarning[]
 }
 
+export interface PortfolioHistoryPoint {
+  asOf: string
+  investedAmount: string | null
+  marketValue: string | null
+}
+
 export async function getPortfolio(signal?: AbortSignal) {
   const response = await fetch('/api/portfolio?reportingCurrency=INR', {
     signal,
@@ -99,4 +105,15 @@ export async function getPortfolio(signal?: AbortSignal) {
     )
   }
   return (await response.json()) as PortfolioSnapshot
+}
+
+export async function getPortfolioHistory(signal?: AbortSignal) {
+  const response = await fetch('/api/portfolio/history?reportingCurrency=INR&limit=60', {
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok) {
+    throw new Error(`Portfolio history request failed (${response.status}).`)
+  }
+  return (await response.json()) as PortfolioHistoryPoint[]
 }

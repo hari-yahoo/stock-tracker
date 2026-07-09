@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { PortfolioQueryDto } from './portfolio.dto';
+import { PortfolioHistoryQueryDto, PortfolioQueryDto } from './portfolio.dto';
 import { PortfolioService } from './portfolio.service';
 
 @Controller('portfolio')
@@ -19,6 +19,11 @@ export class PortfolioController {
   @Get('holdings')
   async holdings(@Query() query: PortfolioQueryDto) {
     return (await this.portfolio.snapshot(query)).holdings;
+  }
+
+  @Get('history')
+  history(@Query() query: PortfolioHistoryQueryDto) {
+    return this.portfolio.history(query);
   }
 
   @Get('alerts')

@@ -95,6 +95,71 @@ function activeAt(
 export class PortfolioService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async history(options: { reportingCurrency?: string; limit?: number }) {
+    const reportingCurrency = normalizeCurrency(
+      options.reportingCurrency ?? 'INR',
+    );
+    const limit = Math.min(Math.max(options.limit ?? 60, 2), 180);
+    const now = new Date();
+    const [trades, prices] = await Promise.all([
+      this.prisma.trade.findMany({
+        where: {
+          OR: [
+            { status: TradeStatus.POSTED },
+            { status: TradeStatus.VOIDED, voidedAt: { gt: now } },
+          ],
+        },
+        select: { executedAt: true },
+        orderBy: [{ executedAt: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.priceSnapshot.findMany({
+        select: { capturedAt: true },
+        orderBy: [{ capturedAt: 'asc' }, { id: 'asc' }],
+      }),
+    ]);
+
+    const byDay = new Map<string, Date>();
+    const addPoint = (date: Date) => {
+      const day = date.toISOString().slice(0, 10);
+      const endOfDay = new Date(`${day}T23:59:59.999Z`);
+      const current = byDay.get(day);
+      if (!current || endOfDay > current) byDay.set(day, endOfDay);
+    };
+
+    trades.forEach((trade) => addPoint(trade.executedAt));
+    prices.forEach((price) => addPoint(price.capturedAt));
+    addPoint(now);
+
+    const sampledDates = [...byDay.values()]
+      .sort((left, right) => left.getTime() - right.getTime())
+      .filter((date) => date <= now);
+    if (sampledDates.length === 0) return [];
+
+    const step = Math.max(1, Math.ceil(sampledDates.length / limit));
+    const dates = sampledDates.filter(
+      (_, index) =>
+        index % step === 0 || index === sampledDates.length - 1,
+    );
+
+    const points = await Promise.all(
+      dates.map(async (date) => {
+        const snapshot = await this.snapshot({
+          asOf: date.toISOString(),
+          reportingCurrency,
+        });
+        return {
+          asOf: date.toISOString(),
+          investedAmount: snapshot.summary.reportingTotals.costBasis,
+          marketValue: snapshot.summary.reportingTotals.currentValue,
+        };
+      }),
+    );
+
+    return points.filter(
+      (point) => point.investedAmount !== null || point.marketValue !== null,
+    );
+  }
+
   async snapshot(options: { asOf?: string; reportingCurrency?: string }) {
     const asOf = options.asOf ? parseDate(options.asOf, 'asOf') : new Date();
     const reportingCurrency = normalizeCurrency(
