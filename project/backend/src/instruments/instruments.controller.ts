@@ -29,6 +29,17 @@ export class InstrumentsController {
     return this.instruments.listIciciSymbolMappings();
   }
 
+  @Post('stock-details')
+  retrieveSymbol(@Body() { symbol }: { symbol: string }) {
+    //return { symbol: symbol };
+    return this.instruments.getSymbol(symbol);
+  }
+
+  @Post('update-symbol')
+  updateSymbol(@Body() dto: { symbol: string; newSymbol: string }) {
+    return this.instruments.updateSymbol(dto.symbol, dto.newSymbol);
+  }
+
   @Post('icici-symbol-mappings')
   saveIciciSymbolMapping(@Body() dto: SaveIciciSymbolMappingDto) {
     return this.instruments.saveIciciSymbolMapping(dto);

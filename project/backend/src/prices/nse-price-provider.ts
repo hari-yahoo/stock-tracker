@@ -48,15 +48,13 @@ export class NsePriceProvider {
 
     for (const instrument of equityInstruments) {
       const symbol = instrument.symbol.trim().toUpperCase();
-      console.log(
-        `Fetching NSE quote for NSE:${symbol} (id: ${instrument.id})`,
-      );
+      console.log(`Fetching quote for NSE:${symbol}`);
 
       try {
         const details = await this.client.getEquityDetails(symbol);
         const lastPrice = details.priceInfo?.lastPrice;
         if (typeof lastPrice === 'number' && Number.isFinite(lastPrice)) {
-          console.log(`NSE:${symbol} (id: ${instrument.id}): ${lastPrice}`);
+          console.log(`${symbol} ---> ${lastPrice}`);
           quotes.push({
             instrumentId: instrument.id,
             price: decimalString(lastPrice),

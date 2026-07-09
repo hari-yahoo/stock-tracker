@@ -69,6 +69,31 @@ export class InstrumentsService {
     });
   }
 
+  async getSymbol(symbol: string) {
+    const normalizedSymbol = normalizeCode(symbol);
+    const instrument = await this.prisma.instrument.findFirst({
+      where: { symbol: normalizedSymbol },
+    });
+    if (!instrument) throw new NotFoundException('Instrument not found');
+    return instrument;
+  }
+
+  async updateSymbol(symbol: string, newSymbol: string) {
+    const normalizedSymbol = normalizeCode(symbol);
+    const normalizedNewSymbol = normalizeCode(newSymbol);
+    return this.prisma.$transaction(async (tx) => {
+      const instrument = await tx.instrument.findFirst({
+        where: { symbol: normalizedSymbol },
+      });
+      if (!instrument) throw new NotFoundException('Instrument not found');
+      await tx.instrument.update({
+        where: { id: instrument.id },
+        data: { symbol: normalizedNewSymbol },
+      });
+      return { updated: true };
+    });
+  }
+
   async saveIciciSymbolMapping(dto: SaveIciciSymbolMappingDto) {
     const iciciSymbol = normalizeCode(dto.iciciSymbol);
     try {

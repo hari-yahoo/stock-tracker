@@ -81,7 +81,7 @@ export function AiInsights() {
         <div className="ai-main">
           <section className="panel prompt-config">
             <div className="prompt-step"><span>1</span><div><h2>Guide the review</h2><p>Optional instructions are appended to the evidence-based review template.</p></div></div>
-            <textarea value={instructions} maxLength={5000} onChange={(event) => setInstructions(event.target.value)} placeholder="For example: Focus on concentration, identify positions without clear exits, and challenge any inconsistent rationale." />
+            <textarea rows={5} cols={50} value={instructions} maxLength={5000} onChange={(event) => setInstructions(event.target.value)} placeholder="For example: Focus on concentration, identify positions without clear exits, and challenge any inconsistent rationale." />
             <div className="prompt-config__footer"><small>{instructions.length.toLocaleString('en-IN')} / 5,000</small><button className="primary-button" disabled={busy} onClick={() => void generate()}>{busy ? 'Building prompt…' : generated ? 'Regenerate prompt' : 'Generate prompt'}</button></div>
           </section>
 
@@ -93,7 +93,7 @@ export function AiInsights() {
             {generated ? (
               <>
                 <div className="context-chips"><span>{generated.context.holdingCount} holdings</span><span>{generated.context.activeExitPlanCount} exit plans</span><span>{generated.context.alertCount} alerts</span><span>{generated.context.closedLotCount} closed lots</span>{generated.context.warningCount > 0 && <span className="context-chip--warning">{generated.context.warningCount} data warnings</span>}</div>
-                <textarea className="prompt-textarea" value={editedPrompt} onChange={(event) => setEditedPrompt(event.target.value)} spellCheck="false" />
+                <textarea rows={5} cols={50} className="prompt-textarea" value={editedPrompt} onChange={(event) => setEditedPrompt(event.target.value)} spellCheck="false" />
               </>
             ) : (
               <div className="prompt-empty"><span>✦</span><strong>Your review prompt will appear here</strong><p>It will contain portfolio totals, holdings, exit plans, alerts, closed lots, and explicit data-quality caveats.</p></div>
