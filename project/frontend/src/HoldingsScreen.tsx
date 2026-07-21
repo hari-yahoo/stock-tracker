@@ -1,9 +1,9 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { Holding, PortfolioSnapshot } from './portfolio'
+import { SelectedHolding } from './SelectedHolding'
 import { listIciciSymbolMappings } from './symbol-mappings'
 import {
   compareDecimalStrings,
-  formatDate,
   formatMoney,
   formatQuantity,
   pnlTone,
@@ -327,83 +327,11 @@ export function HoldingsScreen({
             </div>
 
             {selectedHolding && (
-              <aside className="holding-detail">
-                <div className="holding-detail__hero">
-                  <span className="section-kicker">Selected position</span>
-                  <h3>
-                    <a href={`https://www.screener.in/company/${mappedSymbols[selectedHolding.instrument.symbol] ?? selectedHolding.instrument.symbol}/consolidated/`} target="_blank" rel="noopener noreferrer">
-                      {selectedHolding.instrument.symbol}
-                    </a>
-                  </h3>
-                  
-                  <p>{selectedHolding.instrument.name ?? 'Unnamed instrument'} · {selectedHolding.account.name}</p>
-                </div>
-
-                  <dl className="holding-stat-list">
-                    <div>
-                      <dt>Instrument type</dt>
-                      <dd>{selectedHolding.instrument.instrumentType}</dd>
-                    </div>
-                    <div>
-                    <dt>Exchange</dt>
-                    <dd>{selectedHolding.instrument.exchange}</dd>
-                  </div>
-                  <div>
-                    <dt>Sector</dt>
-                    <dd>{selectedHolding.instrument.sector ?? 'Unassigned'}</dd>
-                  </div>
-                  <div>
-                    <dt>Quantity</dt>
-                    <dd>{formatQuantity(selectedHolding.quantity)}</dd>
-                  </div>
-                  <div>
-                    <dt>Lots</dt>
-                    <dd>{selectedHolding.lots.length}</dd>
-                  </div>
-                  <div>
-                    <dt>Average cost</dt>
-                    <dd>{formatMoney(selectedHolding.averageCost, selectedHolding.instrument.quoteCurrency)}</dd>
-                  </div>
-                  <div>
-                    <dt>Price updated</dt>
-                    <dd>{selectedHolding.priceCapturedAt ? formatDate(selectedHolding.priceCapturedAt) : 'No snapshot yet'}</dd>
-                  </div>
-                </dl>
-
-                <div className="holding-valuation">
-                  <div>
-                    <span>Current value</span>
-                    <strong>{formatMoney(selectedHolding.currentValue, data.reportingCurrency)}</strong>
-                  </div>
-                  <div>
-                    <span>Open P/L</span>
-                    <strong className={`summary-value summary-value--${pnlTone(selectedHolding.unrealizedPnl)}`}>
-                      {formatMoney(selectedHolding.unrealizedPnl, data.reportingCurrency)}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="holding-lots">
-                  <div className="holding-lots__heading">
-                    <h4>Open lots</h4>
-                    <span>{selectedHolding.lots.length}</span>
-                  </div>
-                  {selectedHolding.lots.map((lot, index) => (
-                    <article className="lot-card" key={lot.openingTradeId}>
-                      <strong>Lot {index + 1}</strong>
-                      <small>{lot.openingTradeId.slice(0, 8)}</small>
-                      <div>
-                        <span>Remaining qty</span>
-                        <b>{formatQuantity(lot.remainingQuantity)}</b>
-                      </div>
-                      <div>
-                        <span>Remaining cost</span>
-                        <b>{formatMoney(lot.remainingCost, data.reportingCurrency)}</b>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </aside>
+              <SelectedHolding
+                holding={selectedHolding}
+                mappedSymbol={mappedSymbols[selectedHolding.instrument.symbol] ?? selectedHolding.instrument.symbol}
+                reportingCurrency={data.reportingCurrency}
+              />
             )}
           </div>
         )}
