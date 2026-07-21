@@ -153,3 +153,19 @@ model FxRateSnapshot {
   @@index([capturedAt])
   @@map("fx_rate_snapshots")
 }
+
+model PortfolioDailySnapshot {
+  id                   String   @id @default(uuid())
+  asOfDate             String   @map("as_of_date")
+  reportingCurrency    String   @map("reporting_currency")
+  investedAmountMicros BigInt?  @map("invested_amount_micros")
+  marketValueMicros    BigInt?  @map("market_value_micros")
+  capturedAt           DateTime @map("captured_at")
+  source               String   @default("DAILY_PROCESS")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@unique([reportingCurrency, asOfDate])
+  @@index([capturedAt])
+  @@map("portfolio_daily_snapshots")
+}

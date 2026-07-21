@@ -27,6 +27,31 @@ function presentPrice<T extends { priceMicros: bigint }>(price: T) {
   };
 }
 
+type PriceRefreshTrigger = 'MANUAL' | 'SCHEDULED' | 'CATCH_UP';
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+function istDateKey(date: Date) {
+  return new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function addDays(day: string, days: number) {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function scheduledAtForIstDay(day: string) {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, date, 10, 30, 0, 0));
+}
+
+function isWorkingDay(day: string) {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  const weekday = date.getUTCDay();
+  return weekday >= 1 && weekday <= 5;
+}
+
 @Injectable()
 export class PricesService implements OnModuleInit, OnModuleDestroy {
   private refreshTimer: NodeJS.Timeout | null = null;
@@ -41,6 +66,7 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (this.isEodRefreshEnabled()) {
+      void this.runMissedDailyPortfolioProcesses();
       this.scheduleNextRefresh();
     }
   }
@@ -100,11 +126,14 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
             ? this.zerodha.isConfigured()
             : false,
       nextRunAt: this.nextScheduledRefreshAt?.toISOString() ?? null,
-      schedule: '18:00 IST daily',
+      schedule: '16:00 IST on working days',
     };
   }
 
-  async refreshEndOfDayPrices(trigger: 'MANUAL' | 'SCHEDULED' = 'MANUAL') {
+  async refreshEndOfDayPrices(
+    trigger: PriceRefreshTrigger = 'MANUAL',
+    options: { capturedAt?: Date; sourceSuffix?: string } = {},
+  ) {
     const provider = this.providerName();
     if (provider !== 'NSE' && provider !== 'ZERODHA') {
       throw new BadRequestException(
@@ -146,6 +175,8 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
       exchange: 'NSE',
     }));
 
+    const capturedAt = options.capturedAt ?? new Date();
+
     if (!instruments.length) {
       return {
         trigger,
@@ -153,7 +184,7 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
         requestedInstruments: 0,
         storedPrices: 0,
         missingSymbols: [],
-        refreshedAt: new Date().toISOString(),
+        refreshedAt: capturedAt.toISOString(),
       };
     }
 
@@ -161,15 +192,25 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
       provider === 'NSE'
         ? await this.nse.fetchQuotes(priceInstruments)
         : await this.zerodha.fetchQuotes(priceInstruments);
-    const capturedAt = new Date();
+    const source = `${quotes.provider}_${options.sourceSuffix ?? 'EOD'}`;
 
     for (const quote of quotes.quotes) {
-      await this.prisma.priceSnapshot.create({
-        data: {
+      await this.prisma.priceSnapshot.upsert({
+        where: {
+          instrumentId_capturedAt: {
+            instrumentId: quote.instrumentId,
+            capturedAt,
+          },
+        },
+        create: {
           instrumentId: quote.instrumentId,
           priceMicros: nonNegativeDecimalInput(quote.price, 'price'),
           capturedAt,
-          source: `${quotes.provider}_EOD`,
+          source,
+        },
+        update: {
+          priceMicros: nonNegativeDecimalInput(quote.price, 'price'),
+          source,
         },
       });
     }
@@ -181,6 +222,37 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
       storedPrices: quotes.quotes.length,
       missingSymbols: quotes.missingSymbols,
       refreshedAt: capturedAt.toISOString(),
+    };
+  }
+
+  async runDailyPortfolioProcess(
+    trigger: PriceRefreshTrigger = 'MANUAL',
+    now = new Date(),
+  ) {
+    const dueDays = await this.dueWorkingDays(now);
+    if (trigger === 'MANUAL' && dueDays.length === 0) {
+      dueDays.push(istDateKey(now));
+    }
+    const processed: Array<{
+      asOfDate: string;
+      priceRefresh: Awaited<ReturnType<PricesService['refreshEndOfDayPrices']>>;
+      portfolioSnapshot: Awaited<
+        ReturnType<PortfolioService['recordDailySnapshot']>
+      >;
+    }> = [];
+
+    for (const asOfDate of dueDays) {
+      processed.push(
+        await this.runDailyPortfolioProcessForDay(asOfDate, trigger),
+      );
+    }
+
+    return {
+      trigger,
+      processedDays: processed.length,
+      processed,
+      nextRunAt: this.nextScheduledRefreshAt?.toISOString() ?? null,
+      schedule: '16:00 IST on working days',
     };
   }
 
@@ -250,14 +322,7 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
   private scheduleNextRefresh() {
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     const now = new Date();
-    const istOffsetMs = 5.5 * 60 * 60 * 1000;
-    const nowIst = new Date(now.getTime() + istOffsetMs);
-    const nextIst = new Date(nowIst);
-    nextIst.setUTCHours(18, 0, 0, 0);
-    if (nextIst.getTime() <= nowIst.getTime()) {
-      nextIst.setUTCDate(nextIst.getUTCDate() + 1);
-    }
-    const nextRunAt = new Date(nextIst.getTime() - istOffsetMs);
+    const nextRunAt = this.nextScheduledWorkingDayRun(now);
     this.nextScheduledRefreshAt = nextRunAt;
     this.refreshTimer = setTimeout(
       () => {
@@ -269,9 +334,71 @@ export class PricesService implements OnModuleInit, OnModuleDestroy {
 
   private async runScheduledRefresh() {
     try {
-      await this.refreshEndOfDayPrices('SCHEDULED');
+      await this.runDailyPortfolioProcess('SCHEDULED');
+    } catch (error) {
+      console.error('Daily portfolio process failed', error);
     } finally {
       this.scheduleNextRefresh();
+    }
+  }
+
+  private async runMissedDailyPortfolioProcesses() {
+    try {
+      await this.runDailyPortfolioProcess('CATCH_UP');
+    } catch (error) {
+      console.error('Daily portfolio catch-up failed', error);
+    }
+  }
+
+  private async runDailyPortfolioProcessForDay(
+    asOfDate: string,
+    trigger: PriceRefreshTrigger,
+  ) {
+    const scheduledAt = scheduledAtForIstDay(asOfDate);
+    const priceRefresh = await this.refreshEndOfDayPrices(trigger, {
+      capturedAt: scheduledAt,
+      sourceSuffix: 'DAILY',
+    });
+    const portfolioSnapshot = await this.portfolio.recordDailySnapshot({
+      asOf: scheduledAt,
+      asOfDate,
+      reportingCurrency: 'INR',
+      source: `${trigger}_DAILY_PROCESS`,
+    });
+
+    return { asOfDate, priceRefresh, portfolioSnapshot };
+  }
+
+  private async dueWorkingDays(now: Date) {
+    const [latestSnapshotDate, firstActivityDate] = await Promise.all([
+      this.portfolio.latestDailySnapshotDate('INR'),
+      this.portfolio.firstPortfolioActivityDate(),
+    ]);
+    const today = istDateKey(now);
+    let cursor = latestSnapshotDate
+      ? addDays(latestSnapshotDate, 1)
+      : istDateKey(firstActivityDate ?? now);
+    const dueDays: string[] = [];
+
+    while (cursor <= today) {
+      const scheduledAt = scheduledAtForIstDay(cursor);
+      if (isWorkingDay(cursor) && scheduledAt <= now) {
+        dueDays.push(cursor);
+      }
+      cursor = addDays(cursor, 1);
+    }
+
+    return dueDays;
+  }
+
+  private nextScheduledWorkingDayRun(now: Date) {
+    let day = istDateKey(now);
+    for (;;) {
+      const scheduledAt = scheduledAtForIstDay(day);
+      if (isWorkingDay(day) && scheduledAt > now) {
+        return scheduledAt;
+      }
+      day = addDays(day, 1);
     }
   }
 }

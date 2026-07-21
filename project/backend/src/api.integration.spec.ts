@@ -62,6 +62,19 @@ describe('ledger API services', () => {
         'utf8',
       ),
     );
+    database.exec(
+      readFileSync(
+        join(
+          __dirname,
+          '..',
+          'prisma',
+          'migrations',
+          '20260711160000_add_portfolio_daily_snapshots',
+          'migration.sql',
+        ),
+        'utf8',
+      ),
+    );
     database.close();
     process.env.DATABASE_URL = `file:${databasePath}`;
     prisma = new PrismaService();
@@ -204,6 +217,13 @@ describe('ledger API services', () => {
       unrealizedPnl: '2042.494048',
       realizedPnl: '791.380952',
     });
+    const liveFallbackHistory = await portfolio.history({
+      reportingCurrency: 'INR',
+      limit: 60,
+    });
+    expect(liveFallbackHistory.at(-1)?.asOf.slice(0, 10)).toBe(
+      new Date().toISOString().slice(0, 10),
+    );
 
     const transfer = new DataTransferService(prisma);
     const exported = await transfer.exportTrades();
@@ -377,6 +397,28 @@ describe('ledger API services', () => {
     expect(refresh.provider).toBe('ZERODHA');
     expect(refresh.storedPrices).toBeGreaterThan(0);
     expect(await prisma.priceSnapshot.count()).toBeGreaterThan(2);
+
+    await portfolio.recordDailySnapshot({
+      asOf: new Date('2026-07-06T10:30:00.000Z'),
+      asOfDate: '2026-07-06',
+      reportingCurrency: 'INR',
+      source: 'TEST_SEED',
+    });
+    const dailyProcess = await prices.runDailyPortfolioProcess(
+      'MANUAL',
+      new Date('2026-07-07T11:00:00.000Z'),
+    );
+    expect(dailyProcess.processedDays).toBe(1);
+    expect(dailyProcess.processed[0].asOfDate).toBe('2026-07-07');
+    expect(await prisma.portfolioDailySnapshot.count()).toBe(2);
+    const history = await portfolio.history({
+      reportingCurrency: 'INR',
+      limit: 60,
+    });
+    expect(history).toHaveLength(3);
+    expect(history.at(-1)?.asOf).not.toBe(
+      dailyProcess.processed[0].portfolioSnapshot.asOf,
+    );
     global.fetch = originalFetch;
     delete process.env.STOCK_TRACKER_PRICE_PROVIDER;
     delete process.env.ZERODHA_API_KEY;

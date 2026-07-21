@@ -4,6 +4,7 @@ import { decimalOutput, normalizeCurrency, parseDate } from '../common/api';
 import {
   divideRounded,
   FX_RATE_SCALE,
+  parseScaledDecimal,
   QUANTITY_SCALE,
   tradeValueMicros,
 } from '../common/money';
@@ -81,6 +82,16 @@ function outputAmount(value: bigint | null): string | null {
   return value === null ? null : decimalOutput(value);
 }
 
+function amountInput(value: string | null): bigint | null {
+  return value === null ? null : parseScaledDecimal(value);
+}
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+function istDateKey(date: Date) {
+  return new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function activeAt(
   trade: { status: TradeStatus; voidedAt: Date | null },
   asOf: Date,
@@ -100,6 +111,50 @@ export class PortfolioService {
       options.reportingCurrency ?? 'INR',
     );
     const limit = Math.min(Math.max(options.limit ?? 60, 2), 180);
+    const storedSnapshots = await this.prisma.portfolioDailySnapshot.findMany({
+      where: { reportingCurrency },
+      orderBy: [{ asOfDate: 'desc' }, { capturedAt: 'desc' }],
+      take: limit,
+    });
+
+    if (storedSnapshots.length > 0) {
+      const now = new Date();
+      const today = istDateKey(now);
+      const storedPoints = storedSnapshots
+        .reverse()
+        .map((snapshot) => ({
+          asOfDate: snapshot.asOfDate,
+          asOf: snapshot.capturedAt.toISOString(),
+          investedAmount: outputAmount(snapshot.investedAmountMicros),
+          marketValue: outputAmount(snapshot.marketValueMicros),
+        }))
+        .filter(
+          (point) =>
+            point.investedAmount !== null || point.marketValue !== null,
+        );
+      const liveSnapshot = await this.snapshot({
+        asOf: now.toISOString(),
+        reportingCurrency,
+      });
+      const livePoint = {
+        asOfDate: today,
+        asOf: now.toISOString(),
+        investedAmount: liveSnapshot.summary.reportingTotals.costBasis,
+        marketValue: liveSnapshot.summary.reportingTotals.currentValue,
+      };
+      const points = [
+        ...storedPoints.filter((point) => point.asOfDate !== today),
+        livePoint,
+      ]
+        .filter(
+          (point) =>
+            point.investedAmount !== null || point.marketValue !== null,
+        )
+        .slice(-limit);
+
+      return points.map(({ asOfDate: _asOfDate, ...point }) => point);
+    }
+
     const now = new Date();
     const [trades, prices] = await Promise.all([
       this.prisma.trade.findMany({
@@ -122,8 +177,9 @@ export class PortfolioService {
     const addPoint = (date: Date) => {
       const day = date.toISOString().slice(0, 10);
       const endOfDay = new Date(`${day}T23:59:59.999Z`);
+      const pointTime = endOfDay > now ? now : endOfDay;
       const current = byDay.get(day);
-      if (!current || endOfDay > current) byDay.set(day, endOfDay);
+      if (!current || pointTime > current) byDay.set(day, pointTime);
     };
 
     trades.forEach((trade) => addPoint(trade.executedAt));
@@ -137,8 +193,7 @@ export class PortfolioService {
 
     const step = Math.max(1, Math.ceil(sampledDates.length / limit));
     const dates = sampledDates.filter(
-      (_, index) =>
-        index % step === 0 || index === sampledDates.length - 1,
+      (_, index) => index % step === 0 || index === sampledDates.length - 1,
     );
 
     const points = await Promise.all(
@@ -158,6 +213,76 @@ export class PortfolioService {
     return points.filter(
       (point) => point.investedAmount !== null || point.marketValue !== null,
     );
+  }
+
+  async latestDailySnapshotDate(reportingCurrency = 'INR') {
+    const snapshot = await this.prisma.portfolioDailySnapshot.findFirst({
+      where: { reportingCurrency: normalizeCurrency(reportingCurrency) },
+      orderBy: [{ asOfDate: 'desc' }, { capturedAt: 'desc' }],
+      select: { asOfDate: true },
+    });
+    return snapshot?.asOfDate ?? null;
+  }
+
+  async firstPortfolioActivityDate() {
+    const price = await this.prisma.priceSnapshot.findFirst({
+      orderBy: [{ capturedAt: 'asc' }, { id: 'asc' }],
+      select: { capturedAt: true },
+    });
+    return price?.capturedAt ?? null;
+  }
+
+  async recordDailySnapshot(options: {
+    asOf: Date;
+    asOfDate: string;
+    reportingCurrency?: string;
+    source?: string;
+  }) {
+    const reportingCurrency = normalizeCurrency(
+      options.reportingCurrency ?? 'INR',
+    );
+    const snapshot = await this.snapshot({
+      asOf: options.asOf.toISOString(),
+      reportingCurrency,
+    });
+    const investedAmountMicros = amountInput(
+      snapshot.summary.reportingTotals.costBasis,
+    );
+    const marketValueMicros = amountInput(
+      snapshot.summary.reportingTotals.currentValue,
+    );
+
+    const dailySnapshot = await this.prisma.portfolioDailySnapshot.upsert({
+      where: {
+        reportingCurrency_asOfDate: {
+          reportingCurrency,
+          asOfDate: options.asOfDate,
+        },
+      },
+      create: {
+        asOfDate: options.asOfDate,
+        reportingCurrency,
+        investedAmountMicros,
+        marketValueMicros,
+        capturedAt: options.asOf,
+        source: options.source ?? 'DAILY_PROCESS',
+      },
+      update: {
+        investedAmountMicros,
+        marketValueMicros,
+        capturedAt: options.asOf,
+        source: options.source ?? 'DAILY_PROCESS',
+      },
+    });
+
+    return {
+      asOf: dailySnapshot.capturedAt.toISOString(),
+      asOfDate: dailySnapshot.asOfDate,
+      reportingCurrency: dailySnapshot.reportingCurrency,
+      investedAmount: outputAmount(dailySnapshot.investedAmountMicros),
+      marketValue: outputAmount(dailySnapshot.marketValueMicros),
+      source: dailySnapshot.source,
+    };
   }
 
   async snapshot(options: { asOf?: string; reportingCurrency?: string }) {

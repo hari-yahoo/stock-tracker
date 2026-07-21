@@ -48,7 +48,7 @@ export class PricesController {
 
   @Post('refresh/eod')
   refreshEndOfDayPrices() {
-    return this.prices.refreshEndOfDayPrices('MANUAL');
+    return this.prices.runDailyPortfolioProcess('MANUAL');
   }
 
   @Post('refresh/ltp')

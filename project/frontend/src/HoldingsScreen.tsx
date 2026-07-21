@@ -1,5 +1,6 @@
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { Holding, PortfolioSnapshot } from './portfolio'
+import { listIciciSymbolMappings } from './symbol-mappings'
 import {
   compareDecimalStrings,
   formatDate,
@@ -44,7 +45,20 @@ export function HoldingsScreen({
   const [sortBy, setSortBy] = useState<'value' | 'pnl' | 'symbol' | 'cost'>('value')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [mappedSymbols, setMappedSymbols] = useState<Record<string, string>>({})
   const deferredSearch = useDeferredValue(search.trim().toLowerCase())
+
+  useEffect(() => {
+    void listIciciSymbolMappings()
+      .then((mappings) => {
+        setMappedSymbols(
+          Object.fromEntries(mappings.map(({ iciciSymbol, nseSymbol }) => [iciciSymbol, nseSymbol])),
+        )
+      })
+      .catch(() => {
+        // Keep using the instrument symbol when mappings cannot be loaded.
+      })
+  }, [])
 
   const accounts = useMemo(
     () => Array.from(new Set(data.holdings.map((holding) => holding.account.name))).sort(),
@@ -316,7 +330,12 @@ export function HoldingsScreen({
               <aside className="holding-detail">
                 <div className="holding-detail__hero">
                   <span className="section-kicker">Selected position</span>
-                  <h3>{selectedHolding.instrument.symbol}</h3>
+                  <h3>
+                    <a href={`https://www.screener.in/company/${mappedSymbols[selectedHolding.instrument.symbol] ?? selectedHolding.instrument.symbol}/consolidated/`} target="_blank" rel="noopener noreferrer">
+                      {selectedHolding.instrument.symbol}
+                    </a>
+                  </h3>
+                  
                   <p>{selectedHolding.instrument.name ?? 'Unnamed instrument'} · {selectedHolding.account.name}</p>
                 </div>
 

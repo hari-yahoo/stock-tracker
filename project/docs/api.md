@@ -67,9 +67,9 @@ Trades cannot be edited or deleted. Voiding preserves the audit record. A BUY wi
 - `GET /prices?instrumentId=`
 - `GET /prices/latest?instrumentId=`
 - `POST /prices`
-- `GET /prices/refresh/eod` — report price-provider and schedule status
+- `GET /prices/refresh/eod` — report price-provider and day-end schedule status
 - `POST /prices/refresh/ltp` — fetch the LTP for every open holding and store price snapshots
-- `POST /prices/refresh/eod` — backward-compatible alias for the LTP refresh
+- `POST /prices/refresh/eod` — run the day-end process: catch up any missed working days, refresh prices, and store daily portfolio-level invested amount and market value snapshots
 - `GET /prices/fx?baseCurrency=USD&quoteCurrency=INR`
 - `POST /prices/fx`
 
@@ -81,7 +81,9 @@ The default provider is `NSE`, powered by `stock-nse-india` and requiring no
 credentials. It prices NSE instruments and reports other exchanges in
 `missingSymbols`. Set `STOCK_TRACKER_PRICE_PROVIDER=ZERODHA` plus
 `ZERODHA_API_KEY` and `ZERODHA_ACCESS_TOKEN` to use Kite instead. Set
-`EOD_PRICE_REFRESH_ENABLED=true` to run the same refresh daily at 18:00 IST.
+`EOD_PRICE_REFRESH_ENABLED=true` to run the day-end process at 16:00 IST on
+working days. On startup, missed working days are processed sequentially before
+the next run is scheduled.
 
 FX rates use up to nine decimal places and mean quote currency per one base currency:
 
