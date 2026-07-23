@@ -13,8 +13,7 @@ import { evaluatePlanAlerts } from './alert-rules';
 
 const buyInclude = {
   account: true,
-  instrument: true,
-  exitPlan: true,
+  instrument: { include: { exitPlan: true } },
   openingAllocations: {
     include: { closingTrade: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -152,7 +151,11 @@ export class PortfolioService {
         )
         .slice(-limit);
 
-      return points.map(({ asOfDate: _asOfDate, ...point }) => point);
+      return points.map((point) => ({
+        asOf: point.asOf,
+        investedAmount: point.investedAmount,
+        marketValue: point.marketValue,
+      }));
     }
 
     const now = new Date();
@@ -483,7 +486,7 @@ export class PortfolioService {
 
       return {
         account: holding.account,
-        instrument: holding.instrument,
+        instrument: { ...holding.instrument, exitPlan: undefined },
         quantity: decimalOutput(holding.quantityMicros),
         averageCost: decimalOutput(
           divideRounded(
@@ -513,30 +516,32 @@ export class PortfolioService {
       };
     });
 
+    const alertedInstruments = new Set<string>();
     const alerts = buys.flatMap((buy) => {
       if (
-        !buy.exitPlan ||
-        buy.exitPlan.status !== ExitPlanStatus.ACTIVE ||
-        (remainingQuantity.get(buy.id) ?? 0n) <= 0n
+        !buy.instrument.exitPlan ||
+        buy.instrument.exitPlan.status !== ExitPlanStatus.ACTIVE ||
+        (remainingQuantity.get(buy.id) ?? 0n) <= 0n ||
+        alertedInstruments.has(buy.instrumentId)
       ) {
         return [];
       }
+      alertedInstruments.add(buy.instrumentId);
+      const exitPlan = buy.instrument.exitPlan;
       const price = latestPrice.get(buy.instrumentId);
       return evaluatePlanAlerts({
         asOf,
-        targetDate: buy.exitPlan.targetDate,
+        targetDate: exitPlan.targetDate,
         currentPriceMicros: price?.priceMicros,
-        targetPriceMicros: buy.exitPlan.targetPriceMicros,
+        targetPriceMicros: exitPlan.targetPriceMicros,
       }).map((alert) => ({
         ...alert,
-        exitPlanId: buy.exitPlan!.id,
-        openingTradeId: buy.id,
-        accountId: buy.accountId,
+        exitPlanId: exitPlan.id,
         instrumentId: buy.instrumentId,
         symbol: buy.instrument.symbol,
         currency: buy.instrument.quoteCurrency,
-        targetDate: buy.exitPlan!.targetDate,
-        targetPrice: decimalOutput(buy.exitPlan!.targetPriceMicros),
+        targetDate: exitPlan.targetDate,
+        targetPrice: decimalOutput(exitPlan.targetPriceMicros),
         currentPrice: price ? decimalOutput(price.priceMicros) : null,
       }));
     });

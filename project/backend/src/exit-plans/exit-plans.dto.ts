@@ -13,7 +13,7 @@ const DECIMAL = /^\d+(?:\.\d{1,6})?$/;
 
 export class CreateExitPlanDto {
   @IsUUID()
-  openingTradeId!: string;
+  instrumentId!: string;
 
   @Matches(DECIMAL)
   targetPrice!: string;

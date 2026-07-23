@@ -19,26 +19,19 @@ export class AiPromptsService {
 
   async generate(dto: GeneratePromptDto) {
     const snapshot = await this.portfolio.snapshot({
-      asOf: dto.asOf,
+      asOf: dto.asOf, 
       reportingCurrency: dto.reportingCurrency,
     });
     const [plans, buys] = await Promise.all([
-      this.prisma.exitPlan.findMany({
-        where: {
-          status: ExitPlanStatus.ACTIVE,
-          openingTrade: { status: TradeStatus.POSTED },
-        },
-        include: {
-          openingTrade: { include: { account: true, instrument: true } },
-        },
+      this.prisma.stockExitPlan.findMany({
+        where: { status: ExitPlanStatus.ACTIVE },
+        include: { instrument: true },
         orderBy: { targetDate: 'asc' },
       }),
       this.prisma.trade.findMany({
         where: { side: TradeSide.BUY, status: TradeStatus.POSTED },
         include: {
-          account: true,
-          instrument: true,
-          exitPlan: true,
+          instrument: { include: { exitPlan: true } },
           openingAllocations: {
             where: { closingTrade: { status: TradeStatus.POSTED } },
             include: { closingTrade: true },
@@ -78,7 +71,8 @@ export class AiPromptsService {
           0n,
         );
         const cost =
-          tradeValueMicros(buy.quantityMicros, buy.priceMicros) + buy.feesMicros;
+          tradeValueMicros(buy.quantityMicros, buy.priceMicros) +
+          buy.feesMicros;
         const averageExit = divideRounded(
           proceeds * QUANTITY_SCALE,
           buy.quantityMicros,
@@ -92,17 +86,16 @@ export class AiPromptsService {
         );
         return {
           symbol: buy.instrument.symbol,
-          account: buy.account.name,
           currency: buy.instrument.quoteCurrency,
           quantity: decimalOutput(buy.quantityMicros),
           averageEntry: decimalOutput(buy.priceMicros),
           averageExit: decimalOutput(averageExit),
           realizedPnl: decimalOutput(proceeds - sellFees - cost),
           actualExitDate,
-          plannedPrice: buy.exitPlan
-            ? decimalOutput(buy.exitPlan.targetPriceMicros)
+          plannedPrice: buy.instrument.exitPlan
+            ? decimalOutput(buy.instrument.exitPlan.targetPriceMicros)
             : null,
-          plannedDate: buy.exitPlan?.targetDate ?? null,
+          plannedDate: buy.instrument.exitPlan?.targetDate ?? null,
         };
       });
 
@@ -112,10 +105,9 @@ export class AiPromptsService {
         alert,
       ]),
     );
-    const holdingsWithoutPlans = snapshot.holdings.filter((holding) =>
-      holding.lots.some(
-        (lot) => !plans.some((plan) => plan.openingTradeId === lot.openingTradeId),
-      ),
+    const holdingsWithoutPlans = snapshot.holdings.filter(
+      (holding) =>
+        !plans.some((plan) => plan.instrumentId === holding.instrument.id),
     );
     const totals = snapshot.summary.reportingTotals;
     const currency = snapshot.reportingCurrency;
@@ -129,9 +121,7 @@ export class AiPromptsService {
       'Act as a cautious, evidence-driven portfolio reviewer. This is decision support, not an instruction to trade. Separate facts from assumptions, state uncertainty clearly, and do not invent live prices, company news, fundamentals, or market conditions that are absent from this prompt.',
       '',
       '## Portfolio summary',
-      `- Accounts: ${snapshot.summary.accountCount}`,
       `- Open holdings: ${snapshot.summary.holdingCount}`,
-      `- Open lots: ${snapshot.summary.openLotCount}`,
       `- Current value: ${totals.currentValue ?? 'unavailable'} ${currency}`,
       `- Open cost basis: ${totals.costBasis ?? 'unavailable'} ${currency}`,
       `- Unrealized P/L: ${totals.unrealizedPnl ?? 'unavailable'} ${currency}`,
@@ -145,7 +135,7 @@ export class AiPromptsService {
     } else {
       for (const holding of snapshot.holdings.slice(0, 100)) {
         lines.push(
-          `- ${holding.instrument.symbol} (${holding.instrument.exchange}, ${holding.account.name}): quantity ${holding.quantity}; average cost ${holding.averageCost} ${holding.instrument.quoteCurrency}; current price ${holding.currentPrice ?? 'unavailable'}; market value ${holding.currentValue ?? 'unavailable'}; unrealized P/L ${holding.unrealizedPnl ?? 'unavailable'} (${holding.unrealizedPnlPercent ?? 'unavailable'}%); sector ${holding.instrument.sector ?? 'untagged'}.`,
+          `- ${holding.instrument.symbol}: quantity ${holding.quantity}; average cost ${holding.averageCost} ${holding.instrument.quoteCurrency}; current price ${holding.currentPrice ?? 'unavailable'}; market value ${holding.currentValue ?? 'unavailable'}; unrealized P/L ${holding.unrealizedPnl ?? 'unavailable'} (${holding.unrealizedPnlPercent ?? 'unavailable'}%).`,
         );
       }
     }
@@ -160,7 +150,7 @@ export class AiPromptsService {
           .map((alert) => alert.type)
           .join(', ');
         lines.push(
-          `- ${plan.openingTrade.instrument.symbol} (${plan.openingTrade.account.name}): target ${decimalOutput(plan.targetPriceMicros)} ${plan.openingTrade.instrument.quoteCurrency} by ${plan.targetDate.toISOString().slice(0, 10)}; rationale: ${plan.rationale}; alerts: ${relatedAlerts || 'none'}.`,
+          `- ${plan.instrument.symbol}: target ${decimalOutput(plan.targetPriceMicros)} ${plan.instrument.quoteCurrency} by ${plan.targetDate.toISOString().slice(0, 10)}; rationale: ${plan.rationale}; alerts: ${relatedAlerts || 'none'}.`,
         );
       }
     }
@@ -171,7 +161,7 @@ export class AiPromptsService {
     } else {
       for (const lot of closedLots) {
         lines.push(
-          `- ${lot.symbol} (${lot.account}): quantity ${lot.quantity}; average entry ${lot.averageEntry} ${lot.currency}; average exit ${lot.averageExit}; realized P/L ${lot.realizedPnl}; actual exit ${lot.actualExitDate.toISOString().slice(0, 10)}; planned target ${lot.plannedPrice ?? 'none'}; planned date ${lot.plannedDate?.toISOString().slice(0, 10) ?? 'none'}.`,
+          `- ${lot.symbol}: quantity ${lot.quantity}; average entry ${lot.averageEntry} ${lot.currency}; average exit ${lot.averageExit}; realized P/L ${lot.realizedPnl}; actual exit ${lot.actualExitDate.toISOString().slice(0, 10)}; planned target ${lot.plannedPrice ?? 'none'}; planned date ${lot.plannedDate?.toISOString().slice(0, 10) ?? 'none'}.`,
         );
       }
     }
@@ -180,10 +170,12 @@ export class AiPromptsService {
     if (snapshot.warnings.length === 0 && holdingsWithoutPlans.length === 0) {
       lines.push('- No known price, FX, or exit-plan coverage gaps.');
     } else {
-      snapshot.warnings.forEach((warning) => lines.push(`- ${warning.message}`));
+      snapshot.warnings.forEach((warning) =>
+        lines.push(`- ${warning.message}`),
+      );
       if (holdingsWithoutPlans.length) {
         lines.push(
-          `- ${holdingsWithoutPlans.length} holding(s) contain at least one open lot without an active exit plan: ${holdingsWithoutPlans.map((holding) => holding.instrument.symbol).join(', ')}.`,
+          `- ${holdingsWithoutPlans.length} holding(s) do not have an active stock exit plan: ${holdingsWithoutPlans.map((holding) => holding.instrument.symbol).join(', ')}.`,
         );
       }
     }

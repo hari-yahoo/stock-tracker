@@ -20,7 +20,6 @@ const tradeInclude = {
   instrument: true,
   openingAllocations: true,
   closingAllocations: true,
-  exitPlan: true,
 } satisfies Prisma.TradeInclude;
 
 type TradeResult = Prisma.TradeGetPayload<{ include: typeof tradeInclude }>;
@@ -44,13 +43,6 @@ function presentTrade(trade: TradeResult) {
       quantityMicros: undefined,
       quantity: decimalOutput(allocation.quantityMicros),
     })),
-    exitPlan: trade.exitPlan
-      ? {
-          ...trade.exitPlan,
-          targetPriceMicros: undefined,
-          targetPrice: decimalOutput(trade.exitPlan.targetPriceMicros),
-        }
-      : null,
   };
 }
 
@@ -166,7 +158,6 @@ export class TradesService {
             openingAllocations: {
               where: { closingTrade: { status: TradeStatus.POSTED } },
             },
-            exitPlan: true,
           },
         });
         if (!existing) throw new NotFoundException('Trade not found');
@@ -177,12 +168,6 @@ export class TradesService {
           throw new ConflictException(
             'Cannot void a BUY trade with active sell allocations',
           );
-        }
-        if (existing.exitPlan?.status === 'ACTIVE') {
-          await tx.exitPlan.update({
-            where: { id: existing.exitPlan.id },
-            data: { status: 'CANCELLED' },
-          });
         }
         return tx.trade.update({
           where: { id },

@@ -56,6 +56,19 @@ describe('ledger API services', () => {
           '..',
           'prisma',
           'migrations',
+          '20260722140000_stock_level_exit_plans',
+          'migration.sql',
+        ),
+        'utf8',
+      ),
+    );
+    database.exec(
+      readFileSync(
+        join(
+          __dirname,
+          '..',
+          'prisma',
+          'migrations',
           '20260708130000_add_instrument_type',
           'migration.sql',
         ),
@@ -128,7 +141,7 @@ describe('ledger API services', () => {
     expect(buy.price).toBe('1500.25');
 
     const plan = await plans.create({
-      openingTradeId: buy.id,
+      instrumentId: instrument.id,
       targetPrice: '1600',
       targetDate: '2026-12-05T00:00:00.000Z',
       rationale: 'Expected earnings rerating.',
@@ -158,6 +171,7 @@ describe('ledger API services', () => {
       reportingCurrency: 'INR',
     });
     expect(snapshot.holdings).toHaveLength(1);
+    expect(() => JSON.stringify(snapshot)).not.toThrow();
     expect(snapshot.holdings[0]).toMatchObject({
       quantity: '6.5',
       costBasis: '9764.005952',
@@ -247,7 +261,7 @@ describe('ledger API services', () => {
 
     const voidedBuy = await trades.void(buy.id);
     expect(voidedBuy.status).toBe('VOIDED');
-    expect((await plans.get(plan.id)).status).toBe(ExitPlanStatus.CANCELLED);
+    expect((await plans.get(plan.id)).status).toBe(ExitPlanStatus.ACTIVE);
 
     // Make the voids later than the requested historical snapshot.
     await prisma.trade.updateMany({
@@ -384,7 +398,7 @@ describe('ledger API services', () => {
     process.env.ZERODHA_ACCESS_TOKEN = 'kite-token';
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
+      json: () => ({
         data: {
           'NSE:INFY': { last_price: 1711.45 },
           'NASDAQ:AAPL': { last_price: 112.25 },
@@ -392,7 +406,7 @@ describe('ledger API services', () => {
           'NSE:AAPL': { last_price: 112.25 },
         },
       }),
-    } as Response);
+    });
     const refresh = await prices.refreshEndOfDayPrices('MANUAL');
     expect(refresh.provider).toBe('ZERODHA');
     expect(refresh.storedPrices).toBeGreaterThan(0);
@@ -437,6 +451,11 @@ describe('ledger API services', () => {
     );
     expect(generatedPrompt.prompt).toContain('AAPL');
     expect(generatedPrompt.prompt).toContain('Focus on exit-plan discipline.');
+    expect(generatedPrompt.prompt).not.toContain('Zerodha');
+    expect(generatedPrompt.prompt).not.toContain('NASDAQ');
+    expect(generatedPrompt.prompt).not.toContain('sector ');
+    expect(generatedPrompt.prompt).not.toContain('- Accounts:');
+    expect(generatedPrompt.prompt).not.toContain('- Open lots:');
     expect(generatedPrompt.context.holdingCount).toBeGreaterThan(0);
 
     const backups = new BackupsService(prisma);

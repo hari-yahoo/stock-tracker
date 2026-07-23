@@ -101,7 +101,7 @@ FX rates use up to nine decimal places and mean quote currency per one base curr
 
 ```json
 {
-  "openingTradeId": "buy-uuid",
+  "instrumentId": "instrument-uuid",
   "targetPrice": "1800",
   "targetDate": "2027-01-31T00:00:00.000Z",
   "rationale": "Exit after the expected earnings rerating."
@@ -151,4 +151,4 @@ Restore runs SQLite integrity and required-table checks before replacing data. A
 }
 ```
 
-The endpoint generates a local text prompt containing the portfolio snapshot, open holdings, active exit plans, alerts, recent closed lots, data-quality warnings, and review instructions. It does not send portfolio data to an AI provider.
+The endpoint generates a local text prompt containing decision-relevant portfolio totals, open-position performance, active exit plans, alerts, recent closed-lot outcomes, data-quality warnings, and review instructions. Operational metadata such as broker account, exchange, and sector tags is omitted. It does not send portfolio data to an AI provider.

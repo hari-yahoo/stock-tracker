@@ -14,25 +14,18 @@ import { PrismaService } from '../database/prisma.service';
 import { CreateExitPlanDto, UpdateExitPlanDto } from './exit-plans.dto';
 
 const planInclude = {
-  openingTrade: { include: { account: true, instrument: true } },
-} satisfies Prisma.ExitPlanInclude;
+  instrument: true,
+} satisfies Prisma.StockExitPlanInclude;
 
-type PlanResult = Prisma.ExitPlanGetPayload<{ include: typeof planInclude }>;
+type PlanResult = Prisma.StockExitPlanGetPayload<{
+  include: typeof planInclude;
+}>;
 
 function presentPlan(plan: PlanResult) {
   return {
     ...plan,
     targetPriceMicros: undefined,
     targetPrice: decimalOutput(plan.targetPriceMicros),
-    openingTrade: {
-      ...plan.openingTrade,
-      quantityMicros: undefined,
-      priceMicros: undefined,
-      feesMicros: undefined,
-      quantity: decimalOutput(plan.openingTrade.quantityMicros),
-      price: decimalOutput(plan.openingTrade.priceMicros),
-      fees: decimalOutput(plan.openingTrade.feesMicros),
-    },
   };
 }
 
@@ -41,16 +34,16 @@ export class ExitPlansService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(status?: ExitPlanStatus) {
-    const plans = await this.prisma.exitPlan.findMany({
+    const plans = await this.prisma.stockExitPlan.findMany({
       where: { status },
       include: planInclude,
-      orderBy: { targetDate: 'asc' },
+      orderBy: [{ targetDate: 'asc' }, { instrument: { symbol: 'asc' } }],
     });
     return plans.map(presentPlan);
   }
 
   async get(id: string) {
-    const plan = await this.prisma.exitPlan.findUnique({
+    const plan = await this.prisma.stockExitPlan.findUnique({
       where: { id },
       include: planInclude,
     });
@@ -60,9 +53,9 @@ export class ExitPlansService {
 
   async create(dto: CreateExitPlanDto) {
     try {
-      const plan = await this.prisma.exitPlan.create({
+      const plan = await this.prisma.stockExitPlan.create({
         data: {
-          openingTradeId: dto.openingTradeId,
+          instrumentId: dto.instrumentId,
           targetPriceMicros: nonNegativeDecimalInput(
             dto.targetPrice,
             'targetPrice',
@@ -76,7 +69,7 @@ export class ExitPlansService {
     } catch (error) {
       if (
         error instanceof Error &&
-        error.message.includes('exit plans require')
+        error.message.includes('Foreign key constraint')
       ) {
         throw new ConflictException(error.message);
       }
@@ -86,7 +79,7 @@ export class ExitPlansService {
 
   async update(id: string, dto: UpdateExitPlanDto) {
     try {
-      const plan = await this.prisma.exitPlan.update({
+      const plan = await this.prisma.stockExitPlan.update({
         where: { id },
         data: {
           ...(dto.targetPrice === undefined

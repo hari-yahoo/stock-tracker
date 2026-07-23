@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode, SVGProps } from "react";
 import { AiInsights } from "./AiInsights";
 import { DataTools } from "./DataTools";
+import { ExitPlansScreen } from "./ExitPlansScreen";
 import { HoldingsScreen } from "./HoldingsScreen";
 import { SymbolMappingsScreen } from "./SymbolMappingsScreen";
 import { TransactionsScreen } from "./TransactionsScreen";
@@ -88,6 +89,7 @@ const icons = {
 const navItems = [
   { label: "Dashboard", icon: icons.dashboard, view: "dashboard" as const },
   { label: "Holdings", icon: icons.holdings, view: "holdings" as const },
+  { label: "Exit plans", icon: icons.alert, view: "exit-plans" as const },
   { label: "Transactions", icon: icons.history, view: "transactions" as const },
   { label: "AI Insights", icon: icons.spark, view: "ai" as const },
   { label: "Data & backups", icon: icons.settings, view: "data" as const },
@@ -489,7 +491,13 @@ function Dashboard({
 
 function App() {
   const [view, setView] = useState<
-    "dashboard" | "holdings" | "transactions" | "ai" | "data" | "mappings"
+    | "dashboard"
+    | "holdings"
+    | "exit-plans"
+    | "transactions"
+    | "ai"
+    | "data"
+    | "mappings"
   >("dashboard");
   const [data, setData] = useState<PortfolioSnapshot | null>(null);
   const [history, setHistory] = useState<PortfolioHistoryPoint[]>([]);
@@ -593,6 +601,8 @@ function App() {
       <div className="workspace" id="top">
         {view === "ai" ? (
           <AiInsights />
+        ) : view === "exit-plans" ? (
+          <ExitPlansScreen />
         ) : view === "transactions" ? (
           <TransactionsScreen />
         ) : view === "data" ? (

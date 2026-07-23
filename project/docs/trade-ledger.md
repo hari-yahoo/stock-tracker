@@ -10,7 +10,7 @@
 - A `LotAllocation` assigns part of a sell to a buy lot. This supports partial exits, sales spanning several lots, and deterministic realized P/L.
 - Total active allocations against a buy or sell must never exceed that trade's quantity.
 - Both sides of an allocation must have the same account and instrument; the opening side must be `BUY`, and the closing side must be `SELL`.
-- An exit plan belongs to a buy lot. A lot is closed when active sell allocations equal its quantity. “Closed positions” are therefore derived rather than stored twice.
+- An exit plan belongs to an instrument, so every stock has at most one plan regardless of its accounts or acquisition lots. A lot is closed when active sell allocations equal its quantity. “Closed positions” are therefore derived rather than stored twice.
 
 Allocation policy is explicit. The API may suggest FIFO allocations, but it must persist the chosen allocations and never silently recalculate old sales when newer trades arrive.
 
@@ -18,11 +18,11 @@ Allocation policy is explicit. The API may suggest FIFO allocations, but it must
 
 No monetary or quantity value crosses the application boundary as a JavaScript `number`.
 
-| Concept | Stored unit | Scale |
-| --- | --- | ---: |
-| Quantity | millionths of a share | 1,000,000 |
-| Price, fee, value | millionths of the instrument's quote currency | 1,000,000 |
-| FX rate | billionths of quote currency per one base currency | 1,000,000,000 |
+| Concept           | Stored unit                                        |         Scale |
+| ----------------- | -------------------------------------------------- | ------------: |
+| Quantity          | millionths of a share                              |     1,000,000 |
+| Price, fee, value | millionths of the instrument's quote currency      |     1,000,000 |
+| FX rate           | billionths of quote currency per one base currency | 1,000,000,000 |
 
 Database columns use signed 64-bit `INTEGER` values and TypeScript uses `bigint`. API decimal values are strings such as `"123.450000"`; JSON responses also serialize database integers as decimal strings.
 

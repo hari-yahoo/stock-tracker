@@ -23,7 +23,7 @@ const REQUIRED_TABLES = [
   'instruments',
   'trades',
   'lot_allocations',
-  'exit_plans',
+  'stock_exit_plans',
   'price_snapshots',
   'fx_rate_snapshots',
 ];

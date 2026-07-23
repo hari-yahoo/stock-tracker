@@ -40,17 +40,18 @@ model Account {
 }
 
 model Instrument {
-  id            String          @id @default(uuid())
-  symbol        String
-  exchange      String
-  name          String?
-  sector        String?
-  quoteCurrency String          @map("quote_currency")
-  instrumentType InstrumentType @default(EQUITY) @map("instrument_type")
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-  trades        Trade[]
-  prices        PriceSnapshot[]
+  id             String          @id @default(uuid())
+  symbol         String
+  exchange       String
+  name           String?
+  sector         String?
+  quoteCurrency  String          @map("quote_currency")
+  instrumentType InstrumentType  @default(EQUITY) @map("instrument_type")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  trades         Trade[]
+  prices         PriceSnapshot[]
+  exitPlan       StockExitPlan?
 
   @@unique([symbol, exchange])
   @@index([symbol])
@@ -89,7 +90,6 @@ model Trade {
   instrument         Instrument      @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
   openingAllocations LotAllocation[] @relation("OpeningTrade")
   closingAllocations LotAllocation[] @relation("ClosingTrade")
-  exitPlan           ExitPlan?
 
   @@unique([accountId, externalReference])
   @@index([accountId, instrumentId, executedAt])
@@ -100,41 +100,41 @@ model Trade {
 /// Allocates a SELL quantity to a BUY lot. A sell can close several lots and
 /// a lot can be closed by several sells.
 model LotAllocation {
-  id              String   @id @default(uuid())
-  openingTradeId  String   @map("opening_trade_id")
-  closingTradeId  String   @map("closing_trade_id")
-  quantityMicros  BigInt   @map("quantity_micros")
-  createdAt       DateTime @default(now()) @map("created_at")
-  openingTrade    Trade    @relation("OpeningTrade", fields: [openingTradeId], references: [id], onDelete: Restrict)
-  closingTrade    Trade    @relation("ClosingTrade", fields: [closingTradeId], references: [id], onDelete: Restrict)
+  id             String   @id @default(uuid())
+  openingTradeId String   @map("opening_trade_id")
+  closingTradeId String   @map("closing_trade_id")
+  quantityMicros BigInt   @map("quantity_micros")
+  createdAt      DateTime @default(now()) @map("created_at")
+  openingTrade   Trade    @relation("OpeningTrade", fields: [openingTradeId], references: [id], onDelete: Restrict)
+  closingTrade   Trade    @relation("ClosingTrade", fields: [closingTradeId], references: [id], onDelete: Restrict)
 
   @@unique([openingTradeId, closingTradeId])
   @@index([closingTradeId])
   @@map("lot_allocations")
 }
 
-model ExitPlan {
-  id                   String         @id @default(uuid())
-  openingTradeId       String         @unique @map("opening_trade_id")
-  targetPriceMicros    BigInt         @map("target_price_micros")
-  targetDate           DateTime       @map("target_date")
-  rationale            String
-  status               ExitPlanStatus @default(ACTIVE)
-  createdAt            DateTime       @default(now()) @map("created_at")
-  updatedAt            DateTime       @updatedAt @map("updated_at")
-  openingTrade         Trade          @relation(fields: [openingTradeId], references: [id], onDelete: Restrict)
+model StockExitPlan {
+  id                String         @id @default(uuid())
+  instrumentId      String         @unique @map("instrument_id")
+  targetPriceMicros BigInt         @map("target_price_micros")
+  targetDate        DateTime       @map("target_date")
+  rationale         String
+  status            ExitPlanStatus @default(ACTIVE)
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  instrument        Instrument     @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
 
   @@index([status, targetDate])
-  @@map("exit_plans")
+  @@map("stock_exit_plans")
 }
 
 model PriceSnapshot {
-  id          String     @id @default(uuid())
-  instrumentId String    @map("instrument_id")
-  priceMicros BigInt     @map("price_micros")
-  capturedAt DateTime    @map("captured_at")
-  source      String     @default("MANUAL")
-  instrument  Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  id           String     @id @default(uuid())
+  instrumentId String     @map("instrument_id")
+  priceMicros  BigInt     @map("price_micros")
+  capturedAt   DateTime   @map("captured_at")
+  source       String     @default("MANUAL")
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
 
   @@unique([instrumentId, capturedAt])
   @@index([capturedAt])

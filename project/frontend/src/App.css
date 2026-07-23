@@ -1068,10 +1068,9 @@ tbody tr:hover {
 .mapping-form {
   padding: 22px;
   display: grid;
-  grid-template-columns: minmax(160px, 0.8fr) minmax(160px, 0.8fr) minmax(
-      240px,
-      1.4fr
-    ) auto;
+  grid-template-columns:
+    minmax(160px, 0.8fr) minmax(160px, 0.8fr) minmax(240px, 1.4fr)
+    auto;
   align-items: end;
   gap: 12px;
 }
@@ -1436,6 +1435,59 @@ tbody tr:hover {
   color: var(--red);
   background: var(--red-soft);
 }
+
+.trade-badge--active {
+  color: #176b52;
+  background: #e7f6ef;
+}
+
+.trade-badge--completed {
+  color: #315b9a;
+  background: #eaf1fb;
+}
+
+.trade-badge--cancelled {
+  color: #77706a;
+  background: #f1efed;
+}
+
+.stock-plan-editor {
+  margin-bottom: 20px;
+  padding: 24px;
+}
+
+.stock-plan-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.stock-plan-rationale {
+  grid-column: 1 / -1;
+}
+
+.stock-plan-rationale textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.exit-plan-rationale-cell {
+  min-width: 300px;
+  max-width: 520px;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.exit-plans-table td:last-child {
+  text-align: right;
+}
 .trade-notes {
   margin-top: 14px;
   padding: 14px;
@@ -1699,7 +1751,8 @@ tbody tr:hover {
   }
   .mapping-form,
   .manual-trade-form,
-  .exit-plan-form {
+  .exit-plan-form,
+  .stock-plan-form {
     grid-template-columns: 1fr;
   }
   .manual-trade-notes,
@@ -1707,6 +1760,9 @@ tbody tr:hover {
   .exit-plan-rationale,
   .exit-plan-form > small,
   .exit-plan-form .form-error {
+    grid-column: 1;
+  }
+  .stock-plan-rationale {
     grid-column: 1;
   }
   .transactions-page .page-header {
